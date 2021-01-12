@@ -10,6 +10,7 @@
 
 /******************************PORTING INTERFACE*******************************/
 
+/*
 #include "Arduino.h"
 #include "SoftwareSerial.h"
 
@@ -97,11 +98,13 @@ static void internalSetModuleReset(bool state)
         digitalWrite(internalModuleResetPin, state ? HIGH : LOW);
     }
 }
+*/
+
 
 
 /******************************PORTING INTERFACE*******************************/
 
-
+/*
 SimpleBLE::SimpleBLE(int rxPin, int txPin, int rxEnablePin, int moduleResetPin)
 {
     internalRxPin = rxPin;
@@ -117,6 +120,27 @@ SimpleBLE::SimpleBLE(int rxPin, int txPin, int rxEnablePin, int moduleResetPin)
 
     at = AtProcess(&uart, internalDelay);
 }
+*/
+
+/*
+SimpleBLE::SimpleBLE(GenericGpioSetter *rxEnabledSetter,
+                     GenericGpioSetter *moduleResetSetter,
+                     SerialPut *serialPutter,
+                     SerialGet *serialGetter,
+                     MillisCounter *millisCounterGetter,
+                     MillisecondDelay *delayer,
+                     DebugPrint *debugPrinter
+)
+{
+    SerialUART uart =
+    {
+        .serPut = serialPutter,
+        .serGet = serialGetter
+    };
+
+    at = AtProcess(&uart, internalDelay);
+}
+*/
 
 void SimpleBLE::activateModuleRx(void)
 {
@@ -124,7 +148,8 @@ void SimpleBLE::activateModuleRx(void)
 }
 void SimpleBLE::deactivateModuleRx(void)
 {
-    internalSetRxEnable(false);
+    //internalSetRxEnable(false);
+    internalSetRxEnable(true);
 }
 void SimpleBLE::hardResetModule(void)
 {
@@ -135,9 +160,9 @@ void SimpleBLE::hardResetModule(void)
 
 void SimpleBLE::begin(void)
 {
-    Timeout::init(internalMillis);
+    //Timeout::init(internalMillis);
 
-    internalPortingInit();
+    //internalPortingInit();
 
     at.init();
 
@@ -478,4 +503,5 @@ const char *SimpleBLE::findCmdReturnStatus(const char *cmdRet, const char *statS
 void SimpleBLE::debugPrint(const char *str)
 {
     internalDebug(str);
+    internalDebug("\r\n");
 }

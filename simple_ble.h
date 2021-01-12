@@ -6,6 +6,14 @@
 #include <stdint.h>
 
 
+typedef void (GenericGpioSetter)(bool);
+typedef bool (SerialPut)(char);
+typedef bool (SerialGet)(char*);
+typedef uint32_t (MillisCounter)(void);
+typedef void (MillisecondDelay)(uint32_t);
+typedef void (DebugPrint)(const char*);
+
+
 class SimpleBLE
 {
 public:
@@ -75,7 +83,34 @@ public:
         EXTENDED_PROPERTIES = 0x80
     };
 
-    SimpleBLE(int rxPin, int txPin, int rxEnablePin, int moduleResetPin = -1);
+    //SimpleBLE(int rxPin, int txPin, int rxEnablePin, int moduleResetPin = -1);
+    SimpleBLE(GenericGpioSetter *rxEnabledSetter,
+              GenericGpioSetter *moduleResetSetter,
+              SerialPut *serialPutter,
+              SerialGet *serialGetter,
+              MillisCounter *millisCounterGetter,
+              MillisecondDelay *delayer,
+              DebugPrint *debugPrinter = NULL
+    ) :
+              rxEnabledSetter(rxEnabledSetter),
+              moduleResetSetter(moduleResetSetter),
+              at((SerialUART*)&(SerialUART){serialPutter, serialGetter}, delayer),
+              millisCounterGetter(millisCounterGetter),
+              delayer(delayer),
+              debugPrinter(debugPrinter)
+    {
+        Timeout::init(millisCounterGetter);
+
+        /*
+        SerialUART uart =
+        {
+            .serPut = serialPutter,
+            .serGet = serialGetter
+        };
+
+        at = AtProcess(&uart, internalDelay);
+        */
+    }
 
     void activateModuleRx(void);
     void deactivateModuleRx(void);
@@ -120,8 +155,38 @@ public:
 
 private:
 
+    inline void internalSetRxEnable(bool state)
+    {
+        rxEnabledSetter(state);
+    }
+    inline void internalSetModuleReset(bool state)
+    {
+        moduleResetSetter(state);
+    }
+    inline uint32_t internalMillis(void)
+    {
+        return millisCounterGetter();
+    }
+    inline void internalDelay(uint32_t ms)
+    {
+        delayer(ms);
+    }
+    inline void internalDebug(const char *dbgPrint)
+    {
+        if( debugPrinter )
+        {
+            debugPrinter(dbgPrint);
+        }
+    }
+
     const char *findCmdReturnStatus(const char *cmdRet, const char *statStart);
     void debugPrint(const char *str);
+
+    GenericGpioSetter *rxEnabledSetter;
+    GenericGpioSetter *moduleResetSetter;
+    MillisCounter *millisCounterGetter;
+    MillisecondDelay *delayer;
+    DebugPrint *debugPrinter;
 
     AtProcess at;
 
