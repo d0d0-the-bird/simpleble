@@ -94,7 +94,7 @@ public:
     ) :
               rxEnabledSetter(rxEnabledSetter),
               moduleResetSetter(moduleResetSetter),
-              at((SerialUART*)&(SerialUART){serialPutter, serialGetter}, delayer),
+              at((SerialUART*)&(SerialUART){serialPutter, serialGetter}, delayer, debugPrinter),
               millisCounterGetter(millisCounterGetter),
               delayer(delayer),
               debugPrinter(debugPrinter)

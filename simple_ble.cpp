@@ -5,7 +5,7 @@
 #include <string.h>
 
 
-#define MODULE_RX_BLOCK_SIZE_B                                  (10)
+#define MODULE_RX_BLOCK_SIZE_B                                  (6)
 
 
 /******************************PORTING INTERFACE*******************************/
@@ -222,7 +222,7 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
         sent--;
         while(sent++ % MODULE_RX_BLOCK_SIZE_B)
         {
-            at.write((uint8_t)'\r');
+            at.write((uint8_t)'\0');
         }
 
         // Now is the time to start checking for read data.
