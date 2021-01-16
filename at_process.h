@@ -52,9 +52,11 @@ public:
      * @param debug Pointer to the debug printout function to use.
      */
     AtProcess(SerialUART *uart = NULL,
-              void (*delay)(uint32_t) = NULL) :
+              void (*delay)(uint32_t) = NULL,
+              void (*_output)(const char *) = NULL) :
                                                     uart(*uart),
-                                                    delay(delay)
+                                                    delay(delay),
+                                                    _output(_output)
     {}
 
     /**
@@ -80,6 +82,8 @@ public:
      * @return false URC wasn't received and timeout was reached.
      */
     bool waitURC(const char *urc, uint32_t timeout = 1000);
+    
+    uint32_t getLine(char *line, uint32_t maxLineLen, uint32_t timeout);
 
     /**
      * @brief AT response parser. It can detect The end of response as well as
@@ -92,16 +96,9 @@ public:
      * @return GEN_ERROR Some ERROR was received as a response.
      * @return TIMEOUT Set timeout was reached before response was detected.
      */
-    Status recvResponse(uint32_t timeout = 10000, RespType response = WHOLE);
-
-    /**
-     * @brief Sends provided command and returns the whole response string.
-     * 
-     * @param command AT command string to send.
-     * @param timeout Time in milliseconds to wait for response.
-     * @return const char* Pointer to a null terminated response string.
-     */
-    const char *sendReceiveResponse(const char *command, uint32_t timeout = 3000);
+    Status recvResponse(uint32_t timeout = 3000, char *responseBuff = NULL);
+    
+    Status recvResponseWaitOk(uint32_t timeout = 3000, char *responseBuff = NULL);
 
     /**
      * @brief Sends provided command and returns one of the status codes.
@@ -110,7 +107,7 @@ public:
      * @param timeout Time in milliseconds to wait for response.
      * @return Status one of @ref Status codes.
      */
-    Status sendReceive(const char *command, uint32_t timeout = 3000);
+    Status sendReceive(const char *command, uint32_t timeout = 3000, char *responseBuff = NULL);
 
     /**
      * @brief Print a null terminated string on output communication interface.
@@ -174,14 +171,24 @@ public:
      * @return const char* Pointer to last status buffer. It always holds status
      *                     received for last AT command sent.
      */
-    const char *getLastStatus(void) { return lastStatus; }
+    //const char *getLastStatus(void) { return lastStatus; }
 
 private:
     SerialUART uart;
 
     void (*delay)(uint32_t);
 
-    char lastStatus[64];
+    void (*_output)(const char *);
+
+    void output(const char *str)
+    {
+        if( _output )
+        {
+            _output(str);
+        }
+    }
+
+    //char lastStatus[64];
 };
 
 
