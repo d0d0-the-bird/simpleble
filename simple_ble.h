@@ -118,7 +118,7 @@ public:
 
     void begin(void);
     
-    AtProcess::Status sendReceiveCmd(const char *cmd, uint32_t timeout = 3000);
+    AtProcess::Status sendReceiveCmd(const char *cmd, uint32_t timeout = 3000, char *response = NULL);
     AtProcess::Status sendReadReceiveCmd(const char *cmd,
                                          uint8_t *buff,
                                          uint32_t buffSize,
@@ -131,7 +131,8 @@ public:
                                     uint8_t *buff,
                                     uint32_t size,
                                     bool readNWrite,
-                                    uint32_t timeout = 3000);
+                                    uint32_t timeout = 3000,
+                                    char *response = NULL);
 
     bool softRestart(void);
     bool startAdvertisement(uint32_t advPeriod,

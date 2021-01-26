@@ -171,7 +171,8 @@ void SimpleBLE::begin(void)
 }
 
 AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
-                                            uint32_t timeout)
+                                            uint32_t timeout,
+                                            char *response)
 {
     return sendReceiveCmd(cmd, NULL, 0, false, timeout);
 }
@@ -197,11 +198,19 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
                                             uint8_t *buff,
                                             uint32_t size,
                                             bool readNWrite,
-                                            uint32_t timeout)
+                                            uint32_t timeout,
+                                            char *response)
 {
     AtProcess::Status cmdStatus = AtProcess::GEN_ERROR;
 
+    if( response )
+    {
+        response[0] = '\0';
+    }
+
     activateModuleRx();
+
+    //internalDelay(10);
 
     // We will get an echo of this command uninterrupted with URCs because we
     // send it quick.
@@ -231,30 +240,38 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
             if( readNWrite )
             {
                 // We are reading.
-                AtProcess::Status lineStatus;
+                //AtProcess::Status lineStatus;
+
+                char lineBuff[80+1];
+                uint32_t lineLen = 0;
+
+                // Protect for later string operations.
+                lineBuff[sizeof(lineBuff)-1] = '\0';
 
                 do
                 {
-                    lineStatus = at.recvResponse(1000, AtProcess::URC);
+                    //lineStatus = at.recvResponse(1000, AtProcess::URC);
+                    lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
 
-                }while(strncmp(cmd, at.getLastStatus(), strlen(cmd)) != 0 ||
-                    lineStatus != AtProcess::TIMEOUT
-                );
+                }while(lineLen && strncmp(cmd, lineBuff, strlen(cmd)) != 0);
 
-                if( lineStatus != AtProcess::TIMEOUT )
+                if( lineLen )
                 {
                     // Read one line because it is still not the data.
-                    lineStatus = at.recvResponse(1000, AtProcess::URC);
+                    //lineStatus = at.recvResponse(1000, AtProcess::URC);
+                    lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
 
                     at.readBytesBlocking(buff, size);
                 }
             }
         }
 
-        cmdStatus = at.recvResponse(timeout);
+        cmdStatus = at.recvResponseWaitOk(timeout, response);
     }
 
     deactivateModuleRx();
+    
+    //internalDelay(100);
 
     return cmdStatus;
 }
@@ -268,7 +285,6 @@ bool SimpleBLE::softRestart(void)
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
     else
@@ -296,7 +312,6 @@ bool SimpleBLE::startAdvertisement(uint32_t advPeriod,
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -311,7 +326,6 @@ bool SimpleBLE::stopAdvertisement(void)
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -331,7 +345,6 @@ bool SimpleBLE::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
 
     if( sendWriteReceiveCmd(cmdStr, data, dataLen) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -349,7 +362,6 @@ bool SimpleBLE::setTxPower(TxPower dbm)
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -363,13 +375,13 @@ int SimpleBLE::addService(uint8_t servUuid)
     char cmdStr[50] = "AT+ADDSRV=";
     char helpStr[20];
 
+    char response[100];
+
     strcat(cmdStr, itoa(servUuid, helpStr, 10));
 
-    if( sendReceiveCmd(cmdStr) == AtProcess::SUCCESS )
+    if( sendReceiveCmd(cmdStr, response) == AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
-
-        const char *retStatus = findCmdReturnStatus(at.getLastStatus(), "^ADDSRV:");
+        const char *retStatus = findCmdReturnStatus(response, "^ADDSRV:");
 
         if( retStatus )
         {
@@ -387,17 +399,17 @@ int SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags fla
     char cmdStr[50] = "AT+ADDCHAR=";
     char helpStr[20];
 
+    char response[100];
+
     strcat(cmdStr, itoa(serviceIndex, helpStr, 10));
     strcat(cmdStr, ",");
     strcat(cmdStr, itoa(maxSize, helpStr, 10));
     strcat(cmdStr, ",");
     strcat(cmdStr, itoa(flags, helpStr, 10));
 
-    if( sendReceiveCmd(cmdStr) == AtProcess::SUCCESS )
+    if( sendReceiveCmd(cmdStr, response) == AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
-
-        const char *retStatus = findCmdReturnStatus(at.getLastStatus(), "^ADDCHAR:");
+        const char *retStatus = findCmdReturnStatus(response, "^ADDCHAR:");
 
         if( retStatus )
         {
@@ -419,6 +431,8 @@ int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
     char cmdStr[50] = "AT+READCHAR=";
     char helpStr[20];
 
+    char response[100];
+
     uint32_t readBytes = buffSize;
 
     bool returnData = buff ? true : false ;
@@ -434,14 +448,13 @@ int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
     {
         if( sendReadReceiveCmd(cmdStr, buff, buffSize) == AtProcess::SUCCESS )
         {
-            debugPrint(at.getLastStatus());
         }
     }
     else
     {
-        if( sendReceiveCmd(cmdStr) == AtProcess::SUCCESS )
+        if( sendReceiveCmd(cmdStr, response) == AtProcess::SUCCESS )
         {
-            const char *retStatus = findCmdReturnStatus(at.getLastStatus(), "^READCHAR:");
+            const char *retStatus = findCmdReturnStatus(response, "^READCHAR:");
 
             if( retStatus )
             {
@@ -479,8 +492,6 @@ bool SimpleBLE::writeChar(uint8_t serviceIndex, uint8_t charIndex,
 
     if( sendWriteReceiveCmd(cmdStr, data, dataSize) == AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
-
         retval = true;
     }
 
