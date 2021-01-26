@@ -100,16 +100,6 @@ public:
               debugPrinter(debugPrinter)
     {
         Timeout::init(millisCounterGetter);
-
-        /*
-        SerialUART uart =
-        {
-            .serPut = serialPutter,
-            .serGet = serialGetter
-        };
-
-        at = AtProcess(&uart, internalDelay);
-        */
     }
 
     void activateModuleRx(void);
