@@ -7,6 +7,9 @@
 #include <stdint.h>
 
 
+#define MAX_LINE_LEN_B                      (80+1)
+
+
 
 struct SerialUART
 {

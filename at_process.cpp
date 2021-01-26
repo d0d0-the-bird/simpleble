@@ -14,7 +14,7 @@ void AtProcess::init()
 uint32_t AtProcess::sendCommand(const char *cmd)
 {
     uint32_t charsPrinted = print(cmd);
-    charsPrinted += print("\r");
+    charsPrinted += write('\r');
 
     return charsPrinted;
 }
@@ -25,13 +25,16 @@ bool AtProcess::waitURC(const char *urc, uint32_t timeout)
 
     size_t urcLen = strlen(urc);
 
-    while(recvResponse(timeout, WHOLE) != TIMEOUT)
-    {
-        const char *status = getLastStatus();
+    char lineBuff[MAX_LINE_LEN_B];
 
+    // Protect for later string operations.
+    lineBuff[sizeof(lineBuff)-1] = '\0';
+
+    while(getLine(lineBuff, sizeof(lineBuff)-1, timeout))
+    {
         // First condition ensures string is URC, second checks
         // if it is wanted URC.
-        if(status[0] == '^' && strncmp(urc, status, urcLen) == 0 )
+        if(lineBuff[0] == '^' && strncmp(urc, lineBuff, urcLen) == 0 )
         {
             retval = true;
             break;
@@ -63,9 +66,9 @@ uint32_t AtProcess::getLine(char *line, uint32_t maxLineLen, uint32_t timeout)
             break;
         }
 
-        if( readChar && delay )
+        if( !readChar && delay )
         {
-            delay(1);
+            delay(10);
         }
     }
 
@@ -81,7 +84,7 @@ AtProcess::Status AtProcess::recvResponse(uint32_t timeout, char *responseBuff)
 {
     AtProcess::Status retval = TIMEOUT;
 
-    char lineBuff[80+1];
+    char lineBuff[MAX_LINE_LEN_B];
 
     // Protect for later string operations.
     lineBuff[sizeof(lineBuff)-1] = '\0';
@@ -121,11 +124,14 @@ AtProcess::Status AtProcess::recvResponseWaitOk(uint32_t timeout, char *response
 
     if( err == GEN_ERROR )
     {
-        char additionalResp[80];
+        char *additionalResp = NULL;
+
+        if( responseBuff )
+        {
+            additionalResp = &responseBuff[strlen(responseBuff)];
+        }
 
         recvResponse(timeout, additionalResp);
-
-        strcat(responseBuff, additionalResp);
     }
 
     return err;
@@ -178,4 +184,3 @@ bool AtProcess::read(char *c)
 {
     return uart.serGet(c);
 }
-
