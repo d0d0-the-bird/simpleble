@@ -133,8 +133,8 @@ public:
 
     bool setTxPower(TxPower dbm);
 
-    int addService(uint8_t servUuid);
-    int addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags);
+    int8_t addService(uint8_t servUuid);
+    int8_t addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags);
 
     int32_t checkChar(uint8_t serviceIndex, uint8_t charIndex);
 

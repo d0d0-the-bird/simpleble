@@ -26,10 +26,6 @@ void SimpleBLE::hardResetModule(void)
 
 void SimpleBLE::begin(void)
 {
-    //Timeout::init(internalMillis);
-
-    //internalPortingInit();
-
     at.init();
 
     deactivateModuleRx();
@@ -234,9 +230,9 @@ bool SimpleBLE::setTxPower(TxPower dbm)
     return retval;
 }
 
-int SimpleBLE::addService(uint8_t servUuid)
+int8_t SimpleBLE::addService(uint8_t servUuid)
 {
-    int srvIndex = -1;
+    int8_t srvIndex = -1;
 
     char cmdStr[50] = "AT+ADDSRV=";
     char helpStr[20];
@@ -258,9 +254,9 @@ int SimpleBLE::addService(uint8_t servUuid)
     return srvIndex;
 }
 
-int SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
+int8_t SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
 {
-    int charIndex = -1;
+    int8_t charIndex = -1;
 
     char cmdStr[50] = "AT+ADDCHAR=";
     char helpStr[20];
