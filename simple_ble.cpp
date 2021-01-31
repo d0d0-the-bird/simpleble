@@ -14,8 +14,7 @@ void SimpleBLE::activateModuleRx(void)
 }
 void SimpleBLE::deactivateModuleRx(void)
 {
-    //internalSetRxEnable(false);
-    internalSetRxEnable(true);
+    internalSetRxEnable(false);
 }
 void SimpleBLE::hardResetModule(void)
 {
@@ -36,7 +35,7 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
                                             uint32_t timeout,
                                             char *response)
 {
-    return sendReceiveCmd(cmd, NULL, 0, false, timeout);
+    return sendReceiveCmd(cmd, NULL, 0, false, timeout, response);
 }
 
 AtProcess::Status SimpleBLE::sendReadReceiveCmd(const char *cmd,
@@ -71,8 +70,6 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
     }
 
     activateModuleRx();
-
-    //internalDelay(10);
 
     // We will get an echo of this command uninterrupted with URCs because we
     // send it quick.
@@ -114,6 +111,7 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
                 {
                     //lineStatus = at.recvResponse(1000, AtProcess::URC);
                     lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
+                    internalDebug(lineBuff);
 
                 }while(lineLen && strncmp(cmd, lineBuff, strlen(cmd)) != 0);
 
@@ -122,6 +120,7 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
                     // Read one line because it is still not the data.
                     //lineStatus = at.recvResponse(1000, AtProcess::URC);
                     lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
+                    internalDebug(lineBuff);
 
                     at.readBytesBlocking(buff, size);
                 }
@@ -132,8 +131,6 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
     }
 
     deactivateModuleRx();
-    
-    //internalDelay(100);
 
     return cmdStatus;
 }
@@ -241,7 +238,7 @@ int8_t SimpleBLE::addService(uint8_t servUuid)
 
     strcat(cmdStr, itoa(servUuid, helpStr, 10));
 
-    if( sendReceiveCmd(cmdStr, response) == AtProcess::SUCCESS )
+    if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
     {
         const char *retStatus = findCmdReturnStatus(response, "^ADDSRV:");
 
@@ -269,7 +266,7 @@ int8_t SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags 
     strcat(cmdStr, ",");
     strcat(cmdStr, itoa(flags, helpStr, 10));
 
-    if( sendReceiveCmd(cmdStr, response) == AtProcess::SUCCESS )
+    if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
     {
         const char *retStatus = findCmdReturnStatus(response, "^ADDCHAR:");
 
@@ -314,7 +311,7 @@ int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
     }
     else
     {
-        if( sendReceiveCmd(cmdStr, response) == AtProcess::SUCCESS )
+        if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
         {
             const char *retStatus = findCmdReturnStatus(response, "^READCHAR:");
 
@@ -367,7 +364,7 @@ const char *SimpleBLE::findCmdReturnStatus(const char *cmdRet, const char *statS
 
     if( retStatus )
     {
-        retStatus = strpbrk(retStatus, statStart[strlen(statStart)-1]) + 1;
+        retStatus += strlen(statStart);
     }
 
     return retStatus;
