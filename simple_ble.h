@@ -6,6 +6,9 @@
 #include <stdint.h>
 
 
+#define SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION                   (0)
+
+
 typedef void (GenericGpioSetter)(bool);
 typedef bool (SerialPut)(char);
 typedef bool (SerialGet)(char*);
