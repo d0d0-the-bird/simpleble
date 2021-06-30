@@ -31,6 +31,7 @@ static SimpleBLE ble(
     [](void) { return (uint32_t)millis(); },
     [](uint32_t ms) { delay(ms); },
     [](const char *dbg) { Serial.print(dbg); }
+    //NULL
 );
 
 int exampleService = -1;
@@ -59,47 +60,51 @@ void setup()
 
     Serial.println("Setting TX power");
     ble.setTxPower(SimpleBLE::POW_0DBM);
-    delay(1000);
+    delay(100);
 
     Serial.println("Adding the service");
     exampleService = ble.addService(0xA0);
     Serial.print("Added service: ");
     Serial.println(exampleService);
-    delay(1000);
+    delay(100);
 
     if( exampleService >= 0 )
     {
         exampleChar = ble.addChar(
             exampleService,
-            10,
+            20,
             SimpleBLE::READ | SimpleBLE::WRITE | SimpleBLE::NOTIFY);
 
         Serial.print("Added characteristic: ");
         Serial.println(exampleChar);
-        delay(1000);
+        delay(100);
     }
 
     const char devName[] = "SimpleBLE example";
     ble.setAdvPayload(SimpleBLE::COMPLETE_LOCAL_NAME, (uint8_t*)devName, sizeof(devName)-1);
-    delay(1000);
+    delay(100);
 
+    Serial.println("Starting advertisement.");
     ble.startAdvertisement(100, SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION, true);
-    delay(1000);
+    delay(100);
 }
 
 void loop()
 {
-    int32_t availableData = ble.checkChar(exampleService, exampleChar);
-    delay(1000);
+    int32_t availableData = 100;
+    availableData = ble.checkChar(exampleService, exampleChar);
 
-    if( availableData > 0 )
+    if( availableData != 0 )
     {
+        Serial.print("Read length: ");
+        Serial.print(availableData);
+
+        availableData = abs(availableData);
         uint8_t recvData[availableData];
 
         ble.readChar(exampleService, exampleChar, recvData, availableData);
-        delay(1000);
 
-        Serial.print("Read data: ");
+        Serial.print(", data: ");
         for(int i = 0; i < availableData; i++)
         {
             Serial.print(recvData[i], HEX);
@@ -116,6 +121,8 @@ void loop()
 
         ble.writeChar(exampleService, exampleChar,
                       (uint8_t*)&currMillis, sizeof(currMillis));
-        delay(1000);
+
     }
+
+    delay(30);
 }
