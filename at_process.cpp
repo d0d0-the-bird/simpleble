@@ -172,11 +172,13 @@ uint32_t AtProcess::readBytes(uint8_t *buff, uint32_t readAmount)
 
     return readed;
 }
-uint32_t AtProcess::readBytesBlocking(uint8_t *buff, uint32_t readAmount)
+uint32_t AtProcess::readBytesBlocking(uint8_t *buff, uint32_t readAmount, uint32_t timeout)
 {
     uint32_t readed;
 
-    for(readed = 0; readed < readAmount; readed += uart.serGet((char*)&buff[readed]) ? 1 : 0);
+    Timeout readTimeout(timeout);
+
+    for(readed = 0; readed < readAmount && readTimeout.notExpired(); readed += uart.serGet((char*)&buff[readed]) ? 1 : 0);
 
     return readed;
 }

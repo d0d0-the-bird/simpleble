@@ -156,7 +156,7 @@ public:
      * @param readAmount Amount of data requested.
      * @return uint32_t Amount of data actually received into buffer.
      */
-    uint32_t readBytesBlocking(uint8_t *buff, uint32_t readAmount);
+    uint32_t readBytesBlocking(uint8_t *buff, uint32_t readAmount, uint32_t timeout);
 
     /**
      * @brief Read one character from input communication interface without

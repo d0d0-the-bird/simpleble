@@ -11,10 +11,12 @@
 void SimpleBLE::activateModuleRx(void)
 {
     internalSetRxEnable(true);
+    internalDelay(9);
 }
 void SimpleBLE::deactivateModuleRx(void)
 {
     internalSetRxEnable(false);
+    internalDelay(1);
 }
 void SimpleBLE::hardResetModule(void)
 {
@@ -75,13 +77,10 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
     // send it quick.
     uint32_t sent = at.sendCommand(cmd);
 
-    if( buff )
+    if( !readNWrite && buff )
     {
-        if( !readNWrite )
-        {
-            // We are writing.
-            sent += at.write(buff, size);
-        }
+        // We are writing.
+        sent += at.write(buff, size);
     }
 
     if( sent > 0 )
@@ -94,36 +93,33 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
         }
 
         // Now is the time to start checking for read data.
-        if( buff )
+        if( readNWrite && buff )
         {
-            if( readNWrite )
+            // We are reading.
+            //AtProcess::Status lineStatus;
+
+            char lineBuff[80+1];
+            uint32_t lineLen = 0;
+
+            // Protect for later string operations.
+            lineBuff[sizeof(lineBuff)-1] = '\0';
+
+            do
             {
-                // We are reading.
-                //AtProcess::Status lineStatus;
+                //lineStatus = at.recvResponse(1000, AtProcess::URC);
+                lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
+                internalDebug(lineBuff);
 
-                char lineBuff[80+1];
-                uint32_t lineLen = 0;
+            }while(lineLen && strncmp(cmd, lineBuff, strlen(cmd)) != 0);
 
-                // Protect for later string operations.
-                lineBuff[sizeof(lineBuff)-1] = '\0';
+            if( lineLen )
+            {
+                // Read one line because it is still not the data.
+                //lineStatus = at.recvResponse(1000, AtProcess::URC);
+                lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
+                internalDebug(lineBuff);
 
-                do
-                {
-                    //lineStatus = at.recvResponse(1000, AtProcess::URC);
-                    lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
-                    internalDebug(lineBuff);
-
-                }while(lineLen && strncmp(cmd, lineBuff, strlen(cmd)) != 0);
-
-                if( lineLen )
-                {
-                    // Read one line because it is still not the data.
-                    //lineStatus = at.recvResponse(1000, AtProcess::URC);
-                    lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
-                    internalDebug(lineBuff);
-
-                    at.readBytesBlocking(buff, size);
-                }
+                at.readBytesBlocking(buff, size, 1000);
             }
         }
 
