@@ -5,151 +5,18 @@
 #include <string.h>
 
 
-#define MODULE_RX_BLOCK_SIZE_B                                  (10)
+#define MODULE_RX_BLOCK_SIZE_B                                  (6)
 
-
-/******************************PORTING INTERFACE*******************************/
-
-/*
-#include "Arduino.h"
-#include "SoftwareSerial.h"
-
-static int internalRxPin = -1;
-static int internalTxPin = -1;
-static int internalRxEnablePin = -1;
-static int internalModuleResetPin = -1;
-
-static Stream *serial = NULL;
-static Stream *debug = NULL;
-static SoftwareSerial softSerial(internalRxPin, internalRxPin);
-
-static void internalPortingInit(void)
-{
-    // If using pins for hardware uart.
-    if( internalRxPin == 0 && internalTxPin == 1 )
-    {
-        serial = &Serial;
-
-        Serial.begin(9600);
-    }
-    else
-    {
-        softSerial = SoftwareSerial(internalRxPin, internalTxPin);
-
-        softSerial.begin(9600);
-
-        serial = &softSerial;
-        debug = &Serial;
-    }
-
-    if( internalRxEnablePin >= 0 )
-    {
-        pinMode(internalRxEnablePin, OUTPUT);
-    }
-    if( internalModuleResetPin >= 0 )
-    {
-        pinMode(internalModuleResetPin, OUTPUT);
-    }
-}
-// Timing ports
-static uint32_t internalMillis(void)
-{
-    return millis();
-}
-static void internalDelay(uint32_t ms)
-{
-    delay(ms);
-}
-// Debug
-static void internalDebug(const char *dbgPrint)
-{
-    if( debug )
-    {
-        debug->print(dbgPrint);
-    }
-}
-// Serial ports
-static bool internalSerPut(char c)
-{
-    return serial->write(c) > 0;
-}
-static bool internalSerGet(char *c)
-{
-    bool availableChars = serial->available() > 0;
-
-    *c = availableChars ? serial->read() : *c ;
-
-    return availableChars;
-}
-//GPIO ports
-static void internalSetRxEnable(bool state)
-{
-    // NOTE: active high!!
-    if( internalRxEnablePin >= 0 )
-    {
-        digitalWrite(internalRxEnablePin, state ? HIGH : LOW);
-    }
-}
-static void internalSetModuleReset(bool state)
-{
-    // NOTE: active low!!
-    if( internalModuleResetPin >= 0 )
-    {
-        digitalWrite(internalModuleResetPin, state ? HIGH : LOW);
-    }
-}
-*/
-
-
-
-/******************************PORTING INTERFACE*******************************/
-
-/*
-SimpleBLE::SimpleBLE(int rxPin, int txPin, int rxEnablePin, int moduleResetPin)
-{
-    internalRxPin = rxPin;
-    internalTxPin = txPin;
-    internalRxEnablePin = rxEnablePin;
-    internalModuleResetPin = moduleResetPin;
-    
-    SerialUART uart =
-    {
-        .serPut = internalSerPut,
-        .serGet = internalSerGet
-    };
-
-    at = AtProcess(&uart, internalDelay);
-}
-*/
-
-/*
-SimpleBLE::SimpleBLE(GenericGpioSetter *rxEnabledSetter,
-                     GenericGpioSetter *moduleResetSetter,
-                     SerialPut *serialPutter,
-                     SerialGet *serialGetter,
-                     MillisCounter *millisCounterGetter,
-                     MillisecondDelay *delayer,
-                     DebugPrint *debugPrinter
-)
-{
-    SerialUART uart =
-    {
-        .serPut = serialPutter,
-        .serGet = serialGetter
-    };
-
-    at = AtProcess(&uart, internalDelay);
-}
-*/
 
 void SimpleBLE::activateModuleRx(void)
 {
     internalSetRxEnable(true);
+    internalDelay(9);
 }
 void SimpleBLE::deactivateModuleRx(void)
 {
-    //internalSetRxEnable(false);
-    internalSetRxEnable(true);
+    internalSetRxEnable(false);
+    internalDelay(1);
 }
 void SimpleBLE::hardResetModule(void)
 {
@@ -160,10 +27,6 @@ void SimpleBLE::hardResetModule(void)
 
 void SimpleBLE::begin(void)
 {
-    //Timeout::init(internalMillis);
-
-    //internalPortingInit();
-
     at.init();
 
     deactivateModuleRx();
@@ -171,9 +34,10 @@ void SimpleBLE::begin(void)
 }
 
 AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
-                                            uint32_t timeout)
+                                            uint32_t timeout,
+                                            char *response)
 {
-    return sendReceiveCmd(cmd, NULL, 0, false, timeout);
+    return sendReceiveCmd(cmd, NULL, 0, false, timeout, response);
 }
 
 AtProcess::Status SimpleBLE::sendReadReceiveCmd(const char *cmd,
@@ -197,9 +61,15 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
                                             uint8_t *buff,
                                             uint32_t size,
                                             bool readNWrite,
-                                            uint32_t timeout)
+                                            uint32_t timeout,
+                                            char *response)
 {
     AtProcess::Status cmdStatus = AtProcess::GEN_ERROR;
+
+    if( response )
+    {
+        response[0] = '\0';
+    }
 
     activateModuleRx();
 
@@ -207,13 +77,10 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
     // send it quick.
     uint32_t sent = at.sendCommand(cmd);
 
-    if( buff )
+    if( !readNWrite && buff )
     {
-        if( !readNWrite )
-        {
-            // We are writing.
-            sent += at.write(buff, size);
-        }
+        // We are writing.
+        sent += at.write(buff, size);
     }
 
     if( sent > 0 )
@@ -222,36 +89,41 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
         sent--;
         while(sent++ % MODULE_RX_BLOCK_SIZE_B)
         {
-            at.write((uint8_t)'\r');
+            at.write((uint8_t)'\0');
         }
 
         // Now is the time to start checking for read data.
-        if( buff )
+        if( readNWrite && buff )
         {
-            if( readNWrite )
+            // We are reading.
+            //AtProcess::Status lineStatus;
+
+            char lineBuff[80+1];
+            uint32_t lineLen = 0;
+
+            // Protect for later string operations.
+            lineBuff[sizeof(lineBuff)-1] = '\0';
+
+            do
             {
-                // We are reading.
-                AtProcess::Status lineStatus;
+                //lineStatus = at.recvResponse(1000, AtProcess::URC);
+                lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
+                internalDebug(lineBuff);
 
-                do
-                {
-                    lineStatus = at.recvResponse(1000, AtProcess::URC);
+            }while(lineLen && strncmp(cmd, lineBuff, strlen(cmd)) != 0);
 
-                }while(strncmp(cmd, at.getLastStatus(), strlen(cmd)) != 0 ||
-                    lineStatus != AtProcess::TIMEOUT
-                );
+            if( lineLen )
+            {
+                // Read one line because it is still not the data.
+                //lineStatus = at.recvResponse(1000, AtProcess::URC);
+                lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
+                internalDebug(lineBuff);
 
-                if( lineStatus != AtProcess::TIMEOUT )
-                {
-                    // Read one line because it is still not the data.
-                    lineStatus = at.recvResponse(1000, AtProcess::URC);
-
-                    at.readBytesBlocking(buff, size);
-                }
+                at.readBytesBlocking(buff, size, 1000);
             }
         }
 
-        cmdStatus = at.recvResponse(timeout);
+        cmdStatus = at.recvResponseWaitOk(timeout, response);
     }
 
     deactivateModuleRx();
@@ -268,7 +140,6 @@ bool SimpleBLE::softRestart(void)
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
     else
@@ -296,7 +167,6 @@ bool SimpleBLE::startAdvertisement(uint32_t advPeriod,
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -311,7 +181,6 @@ bool SimpleBLE::stopAdvertisement(void)
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -331,7 +200,6 @@ bool SimpleBLE::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
 
     if( sendWriteReceiveCmd(cmdStr, data, dataLen) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
@@ -349,27 +217,26 @@ bool SimpleBLE::setTxPower(TxPower dbm)
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
         retval = false;
     }
 
     return retval;
 }
 
-int SimpleBLE::addService(uint8_t servUuid)
+int8_t SimpleBLE::addService(uint8_t servUuid)
 {
-    int srvIndex = -1;
+    int8_t srvIndex = -1;
 
     char cmdStr[50] = "AT+ADDSRV=";
     char helpStr[20];
 
+    char response[100];
+
     strcat(cmdStr, itoa(servUuid, helpStr, 10));
 
-    if( sendReceiveCmd(cmdStr) == AtProcess::SUCCESS )
+    if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
-
-        const char *retStatus = findCmdReturnStatus(at.getLastStatus(), "^ADDSRV:");
+        const char *retStatus = findCmdReturnStatus(response, "^ADDSRV:");
 
         if( retStatus )
         {
@@ -380,12 +247,14 @@ int SimpleBLE::addService(uint8_t servUuid)
     return srvIndex;
 }
 
-int SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
+int8_t SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
 {
-    int charIndex = -1;
+    int8_t charIndex = -1;
 
     char cmdStr[50] = "AT+ADDCHAR=";
     char helpStr[20];
+
+    char response[100];
 
     strcat(cmdStr, itoa(serviceIndex, helpStr, 10));
     strcat(cmdStr, ",");
@@ -393,11 +262,9 @@ int SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags fla
     strcat(cmdStr, ",");
     strcat(cmdStr, itoa(flags, helpStr, 10));
 
-    if( sendReceiveCmd(cmdStr) == AtProcess::SUCCESS )
+    if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
-
-        const char *retStatus = findCmdReturnStatus(at.getLastStatus(), "^ADDCHAR:");
+        const char *retStatus = findCmdReturnStatus(response, "^ADDCHAR:");
 
         if( retStatus )
         {
@@ -419,6 +286,8 @@ int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
     char cmdStr[50] = "AT+READCHAR=";
     char helpStr[20];
 
+    char response[100];
+
     uint32_t readBytes = buffSize;
 
     bool returnData = buff ? true : false ;
@@ -434,14 +303,13 @@ int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
     {
         if( sendReadReceiveCmd(cmdStr, buff, buffSize) == AtProcess::SUCCESS )
         {
-            debugPrint(at.getLastStatus());
         }
     }
     else
     {
-        if( sendReceiveCmd(cmdStr) == AtProcess::SUCCESS )
+        if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
         {
-            const char *retStatus = findCmdReturnStatus(at.getLastStatus(), "^READCHAR:");
+            const char *retStatus = findCmdReturnStatus(response, "^READCHAR:");
 
             if( retStatus )
             {
@@ -479,8 +347,6 @@ bool SimpleBLE::writeChar(uint8_t serviceIndex, uint8_t charIndex,
 
     if( sendWriteReceiveCmd(cmdStr, data, dataSize) == AtProcess::SUCCESS )
     {
-        debugPrint(at.getLastStatus());
-
         retval = true;
     }
 
@@ -494,7 +360,7 @@ const char *SimpleBLE::findCmdReturnStatus(const char *cmdRet, const char *statS
 
     if( retStatus )
     {
-        retStatus = strpbrk(retStatus, statStart[strlen(statStart)-1]) + 1;
+        retStatus += strlen(statStart);
     }
 
     return retStatus;

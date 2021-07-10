@@ -14,7 +14,7 @@ void AtProcess::init()
 uint32_t AtProcess::sendCommand(const char *cmd)
 {
     uint32_t charsPrinted = print(cmd);
-    charsPrinted += print("\r");
+    charsPrinted += write('\r');
 
     return charsPrinted;
 }
@@ -25,13 +25,16 @@ bool AtProcess::waitURC(const char *urc, uint32_t timeout)
 
     size_t urcLen = strlen(urc);
 
-    while(recvResponse(timeout, WHOLE) != TIMEOUT)
-    {
-        const char *status = getLastStatus();
+    char lineBuff[MAX_LINE_LEN_B];
 
+    // Protect for later string operations.
+    lineBuff[sizeof(lineBuff)-1] = '\0';
+
+    while(getLine(lineBuff, sizeof(lineBuff)-1, timeout))
+    {
         // First condition ensures string is URC, second checks
         // if it is wanted URC.
-        if(status[0] == '^' && strncmp(urc, status, urcLen) == 0 )
+        if(lineBuff[0] == '^' && strncmp(urc, lineBuff, urcLen) == 0 )
         {
             retval = true;
             break;
@@ -41,83 +44,103 @@ bool AtProcess::waitURC(const char *urc, uint32_t timeout)
     return retval;
 }
 
-AtProcess::Status AtProcess::recvResponse(uint32_t timeout, RespType response)
+uint32_t AtProcess::getLine(char *line, uint32_t maxLineLen, uint32_t timeout)
 {
-    AtProcess::Status retval = TIMEOUT;
-
-    char *status = lastStatus;
-
-    *status = '\0';
-    char *lastStatusChar = &lastStatus[sizeof(lastStatus)-1];
+    uint32_t lineLen = 0;
 
     Timeout respTimeout(timeout);
 
-    while(respTimeout.notExpired())
+    while(lineLen < maxLineLen && respTimeout.notExpired())
     {
         char lastChar = '\0';
+        bool readChar = false;
 
-        while(read(&lastChar))
+        if( read(&lastChar) )
         {
-            if( status != lastStatusChar && lastChar )
-            {
-                *status = lastChar;
-
-                status++;
-            }
-
-            if( response == URC && lastChar == '\n' )
-            {
-                break;
-            }
+            line[lineLen++] = lastChar;
+            readChar = true;
         }
 
-        if( response == URC )
+        if( lastChar == '\n' )
         {
-            if( lastChar == '\n' )
-            {
-                retval = SUCCESS;
-                break;
-            }
+            break;
         }
-        else
+
+        if( !readChar && delay )
         {
-            if( strstr(lastStatus, "OK") )
-            {
-                retval = SUCCESS;
-                break;
-            }
-            else if( strstr(lastStatus, "ERROR") )
-            {
-                retval = GEN_ERROR;
-                break;
-            }
+            delay(10);
         }
     }
 
-    *status = '\0';
-
-    if( response == WHOLE && retval == SUCCESS )
+    if( lineLen < maxLineLen )
     {
-        delay(10);
+        line[lineLen] = '\0';
+    }
+
+    return lineLen;
+}
+
+AtProcess::Status AtProcess::recvResponse(uint32_t timeout, char *responseBuff)
+{
+    AtProcess::Status retval = TIMEOUT;
+
+    char lineBuff[MAX_LINE_LEN_B];
+
+    // Protect for later string operations.
+    lineBuff[sizeof(lineBuff)-1] = '\0';
+
+    if( responseBuff )
+    {
+        *responseBuff = '\0';
+    }
+
+    while(getLine(lineBuff, sizeof(lineBuff)-1, timeout))
+    {
+        if( responseBuff )
+        {
+            strcat(responseBuff, lineBuff);
+        }
+
+        output(lineBuff);
+
+        if( strstr(lineBuff, "OK") )
+        {
+            retval = SUCCESS;
+            break;
+        }
+        else if( strstr(lineBuff, "ERROR") )
+        {
+            retval = GEN_ERROR;
+            break;
+        }
     }
 
     return retval;
 }
 
-
-const char *AtProcess::sendReceiveResponse(const char *command, uint32_t timeout)
+AtProcess::Status AtProcess::recvResponseWaitOk(uint32_t timeout, char *responseBuff)
 {
-    sendCommand(command);
+    Status err = recvResponse(timeout, responseBuff);
 
-    recvResponse(timeout);
+    if( err == GEN_ERROR )
+    {
+        char *additionalResp = NULL;
 
-    return getLastStatus();
+        if( responseBuff )
+        {
+            additionalResp = &responseBuff[strlen(responseBuff)];
+        }
+
+        recvResponse(timeout, additionalResp);
+    }
+
+    return err;
 }
 
-AtProcess::Status AtProcess::sendReceive(const char *command, uint32_t timeout)
+AtProcess::Status AtProcess::sendReceive(const char *command, uint32_t timeout, char *responseBuff)
 {
     sendCommand(command);
-    return recvResponse(timeout);
+    return recvResponse(timeout, responseBuff);
 }
 
 uint32_t AtProcess::print(const char *str)
@@ -149,11 +172,13 @@ uint32_t AtProcess::readBytes(uint8_t *buff, uint32_t readAmount)
 
     return readed;
 }
-uint32_t AtProcess::readBytesBlocking(uint8_t *buff, uint32_t readAmount)
+uint32_t AtProcess::readBytesBlocking(uint8_t *buff, uint32_t readAmount, uint32_t timeout)
 {
     uint32_t readed;
 
-    for(readed = 0; readed < readAmount; readed += uart.serGet((char*)&buff[readed]) ? 1 : 0);
+    Timeout readTimeout(timeout);
+
+    for(readed = 0; readed < readAmount && readTimeout.notExpired(); readed += uart.serGet((char*)&buff[readed]) ? 1 : 0);
 
     return readed;
 }
@@ -161,4 +186,3 @@ bool AtProcess::read(char *c)
 {
     return uart.serGet(c);
 }
-

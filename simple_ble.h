@@ -6,6 +6,9 @@
 #include <stdint.h>
 
 
+#define SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION                   (0)
+
+
 typedef void (GenericGpioSetter)(bool);
 typedef bool (SerialPut)(char);
 typedef bool (SerialGet)(char*);
@@ -94,22 +97,12 @@ public:
     ) :
               rxEnabledSetter(rxEnabledSetter),
               moduleResetSetter(moduleResetSetter),
-              at((SerialUART*)&(SerialUART){serialPutter, serialGetter}, delayer),
+              at((SerialUART*)&(SerialUART){serialPutter, serialGetter}, delayer, debugPrinter),
               millisCounterGetter(millisCounterGetter),
               delayer(delayer),
               debugPrinter(debugPrinter)
     {
         Timeout::init(millisCounterGetter);
-
-        /*
-        SerialUART uart =
-        {
-            .serPut = serialPutter,
-            .serGet = serialGetter
-        };
-
-        at = AtProcess(&uart, internalDelay);
-        */
     }
 
     void activateModuleRx(void);
@@ -118,7 +111,7 @@ public:
 
     void begin(void);
     
-    AtProcess::Status sendReceiveCmd(const char *cmd, uint32_t timeout = 3000);
+    AtProcess::Status sendReceiveCmd(const char *cmd, uint32_t timeout = 3000, char *response = NULL);
     AtProcess::Status sendReadReceiveCmd(const char *cmd,
                                          uint8_t *buff,
                                          uint32_t buffSize,
@@ -131,7 +124,8 @@ public:
                                     uint8_t *buff,
                                     uint32_t size,
                                     bool readNWrite,
-                                    uint32_t timeout = 3000);
+                                    uint32_t timeout = 3000,
+                                    char *response = NULL);
 
     bool softRestart(void);
     bool startAdvertisement(uint32_t advPeriod,
@@ -142,8 +136,8 @@ public:
 
     bool setTxPower(TxPower dbm);
 
-    int addService(uint8_t servUuid);
-    int addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags);
+    int8_t addService(uint8_t servUuid);
+    int8_t addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags);
 
     int32_t checkChar(uint8_t serviceIndex, uint8_t charIndex);
 
