@@ -39,13 +39,46 @@ Simple BLE module is controlled with AT commands through UART interface for simp
 ## UART configuration
 
 Default UART configuration is 9600 baud, with 8 data bits, 1 stop bit and no parity bit. This can't be changed, except for speed which can be changed by write command *AT+SETBAUD=\<newBaud\>*.
+
 Supported baudrates are 1200, 2400, 4800, 9600 14400, 19200, 28800, 31250, 38400, 56000, 76800, 115200, 230400, 250000, 460800, 921600 and 1000000 .
 In order for new UART speed to be in effect, pin RXEN needs to be de-asserted(HIGH to LOW) and asserted(LOW to HIGH). After assertion new speed will apply. For now speed setting is not saved to ROM, so after reset speed will always be the default speed.
 
 ## AT command interface
 
-There are two types of AT commands, read commands and write commands. Read commands are used for reading configuration from Simple BLE module, and write commands are used for writting configuration to modem.
-Read command sintax is ```"AT+COMMAND?"``` where ```COMMAND``` is one of the supported commands. Notice the question mark ```?``` at the end of command. Read command can also be without question mark, so ```"AT+COMMAND"``` is also valid.
-Write command sintax is ```"AT+COMMAND=<commaSepparatedArgumentList>"``` where ```COMMAND``` is again one of the supported commands, and after that comes the ```=``` sign, and after it ```<commaSepparatedArgumentList>```. For example ```<commaSepparatedArgumentList>``` could be ```1,3,107``` or ```4532``` depending on command. So for the first example, complete command would look like this: ```"AT+COMMAND=1,3,107"``` and for the second example complete command would look like this: ```"AT+COMMAND=4532"``` .
+There are three types of AT commands, read commands, write commands and switch commands. Read commands are used for reading configuration from Simple BLE module, and write commands are used for writting configuration to modem.
 
-Commands should always end with carriage return character. After carriage return is received by Simple BLE module it will start processing the command. Module always gives echo back, and sends the response to sent command. At the end of command processing ```"OK"``` is always sent to signal that processing of the command is complete and that module is ready for new command. Even if there is and error during processing of the command module will still send the ```"OK"``` . If error did occur during command processing you will receive ```"ERROR"``` string along with some explanation string.
+* Read command sintax is ```"AT+COMMAND?"``` where ```COMMAND``` is one of the supported commands. Notice the question mark ```?``` at the end of command.
+
+* Write command sintax is ```"AT+COMMAND=<commaSepparatedArgumentList>"``` where ```COMMAND``` is again one of the supported commands, and after that comes the ```=``` sign, and after it ```<commaSepparatedArgumentList>```.
+
+* Switch command is without question mark, so ```"AT+COMMAND"``` where ```COMMAND``` is one of the supported commands. Switch commands can have their own functionality, or share functionality with a read command or with a write command.
+
+For example ```<commaSepparatedArgumentList>``` could be ```1,3,107``` or ```4532``` depending on command. So for the first example, complete command would look like this: ```"AT+COMMAND=1,3,107"``` and for the second example complete command would look like this: ```"AT+COMMAND=4532"``` .
+
+Commands should always end with carriage return character. After carriage return is received by Simple BLE module it will start processing the command. Module always gives echo back, and sends the response to sent command. At the end of command processing ```"OK"``` is always sent to signal that processing of the command is complete and that module is ready for new command. Even if there is an error during processing of the command module will still send the ```"OK"``` . If error did occur during command processing you will also receive ```"ERROR"``` string along with some explanation string.
+
+Module can send responses even when no AT commands requested them. These are called URC, Unsolicited Response Code, because they are not requested but are sent to signal that module internal state changed.
+
+One more thing to note is that UART interface receives bytes in batches of 6 in order to be as efficient as possible. For this reason there is a thing called UART receive timeout. If no character is received in more than UART receive timeout time then incomplete batch can be received for processing (less than 6 bytes) . This is great for manual input of commands, but if module is controlled from another source it is probably capable of higher speeds. This is why it is recomended to send aditional dummy characters over UART in order to fill the whole batch of 6 bytes. Simple BLE library takes care of this, but if you are developing your library you should take this into consideration.
+
+## AT commands
+
+| Command | Read | Write | Switch | Write arguments |
+| ------- | ---- | ----- | ------ | --------------- |
+| AT | No | No | Yes | - |
+| AT+SETBAUD | No | Yes | No | \<newBaud\> |
+| AT+RESTART | No | No | Yes | - |
+| AT+STAT | Yes | No | No | - |
+| AT+ADVSTART | Yes | Yes | Yes | \<advInt\>,\<advTimeout\>,\<restartOnDisconnect\> |
+| AT+ADVSTOP | Yes | Yes | Yes | - |
+| AT+ADVPAYLOAD | No | Yes | Yes | \<type\>,\<dataSize\> |
+| AT+TXPOWER | Yes | Yes | Yes | \<dBm\> |
+| AT+ADDSRV | No | Yes | Yes | \<uuid\> |
+| AT+ADDCHAR | No | Yes | Yes | \<service\>,\<size\>,\<flags\> |
+| AT+READCHAR | No | Yes | Yes | \<service\>,\<characteristic\>,\<returnData\> |
+| AT+WRITECHAR | No | Yes | Yes | \<service\>,\<characteristic\>,\<writeLen\> |
+| AT+FORCEDISC | No | Yes | Yes | - |
+
+### AT
+
+AT command is used to check if module works and is ready to receive AT commands. It doesn't do anything to the internal module state.
