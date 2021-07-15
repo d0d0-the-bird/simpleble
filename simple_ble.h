@@ -86,7 +86,24 @@ public:
         EXTENDED_PROPERTIES = 0x80
     };
 
-    //SimpleBLE(int rxPin, int txPin, int rxEnablePin, int moduleResetPin = -1);
+    /**
+     * @brief Construct a new Simple BLE object
+     * 
+     * @param rxEnabledSetter Function pointer to a function that sets and clears
+     *                        RX enabled pin.
+     * @param moduleResetSetter Function pointer to a function that sets and clears
+     *                          module reset pin.
+     * @param serialPutter Function pointer to a function that puts one char to
+     *                     serial interface.
+     * @param serialGetter Function pointer to a function that receives one character
+     *                     from serial interface.
+     * @param millisCounterGetter Function pointer to a function that gets total
+     *                            elapsed milliseconds from start of the program.
+     * @param delayer Function pointer to a function that delays further execution
+     *                by specified number of milliseconds.
+     * @param debugPrinter Optional Function pointer to a function that prints
+     *                     various debug information to desired output.
+     */
     SimpleBLE(GenericGpioSetter *rxEnabledSetter,
               GenericGpioSetter *moduleResetSetter,
               SerialPut *serialPutter,
@@ -105,21 +122,94 @@ public:
         Timeout::init(millisCounterGetter);
     }
 
+    /**
+     * @brief Activate module serial reception of data.
+     * 
+     */
     void activateModuleRx(void);
+    /**
+     * @brief Deactivate module serial reception of data to save power.
+     * 
+     */
     void deactivateModuleRx(void);
+    /**
+     * @brief Reset the module via reset pin. Do this only if software reset
+     *        doesn't work.
+     * 
+     */
     void hardResetModule(void);
 
+    /**
+     * @brief Initialise pins to initial values and put module to known state.
+     * 
+     */
     void begin(void);
     
+    /**
+     * @brief Send a command that doesn't need to receive any data.
+     * 
+     * @param cmd Command string that you want to send.
+     * @param timeout How long to wait for module response in milliseconds.
+     * @param response Optional buffer to store module response, make sure it is
+     *                 of sufficient size!
+     * @return AtProcess::Status Returns SUCCESS if response was received and no
+     *                           error was reported by module.
+     *                           Returns TIMEOUT if no command was received in
+     *                           specified time.
+     *                           Returns GEN_ERROR if module reported and error.
+     */
     AtProcess::Status sendReceiveCmd(const char *cmd, uint32_t timeout = 3000, char *response = NULL);
+    /**
+     * @brief Send a command that has to read data from serial.
+     * 
+     * @param cmd Command string that you want to send.
+     * @param buff Data buffer in which to store received data.
+     * @param buffSize Data buffer size.
+     * @param timeout How long to wait for module response in milliseconds.
+     * @return AtProcess::Status Returns SUCCESS if response was received and no
+     *                           error was reported by module.
+     *                           Returns TIMEOUT if no command was received in
+     *                           specified time.
+     *                           Returns GEN_ERROR if module reported and error.
+     */
     AtProcess::Status sendReadReceiveCmd(const char *cmd,
                                          uint8_t *buff,
                                          uint32_t buffSize,
                                          uint32_t timeout = 3000);
+    /**
+     * @brief Send a command that also has to write data to serial.
+     * 
+     * @param cmd Command string that you want to send.
+     * @param data Data buffer which contains data for Simple BLE module.
+     * @param dataSize Length of data in data buffer.
+     * @param timeout How long to wait for module response in milliseconds.
+     * @return AtProcess::Status Returns SUCCESS if response was received and no
+     *                           error was reported by module.
+     *                           Returns TIMEOUT if no command was received in
+     *                           specified time.
+     *                           Returns GEN_ERROR if module reported and error.
+     */
     AtProcess::Status sendWriteReceiveCmd(const char *cmd,
                                           uint8_t *data,
                                           uint32_t dataSize,
                                           uint32_t timeout = 3000);
+    /**
+     * @brief Command that joins all of the above sendReceiveCmd into one function.
+     * 
+     * @param cmd Command string that you want to send.
+     * @param buff Read buffer or write data depending on readNWrite parameter. Set
+     *             to NULL if neither is needed.
+     * @param size Size of the buffer or data length, depending on readNWrite parameter.
+     * @param readNWrite Boolean which tells if data should be read or written.
+     * @param timeout How long to wait for module response in milliseconds.
+     * @param response Optional buffer to store module response, make sure it is
+     *                 of sufficient size!
+     * @return AtProcess::Status Returns SUCCESS if response was received and no
+     *                           error was reported by module.
+     *                           Returns TIMEOUT if no command was received in
+     *                           specified time.
+     *                           Returns GEN_ERROR if module reported and error.
+     */
     AtProcess::Status sendReceiveCmd(const char *cmd,
                                     uint8_t *buff,
                                     uint32_t size,
@@ -127,23 +217,117 @@ public:
                                     uint32_t timeout = 3000,
                                     char *response = NULL);
 
+    /**
+     * @brief Restart Simple BLE module via builtin command.
+     * 
+     * @return true If module successfuly restarted.
+     * @return false If and error occured during module restart.
+     */
     bool softRestart(void);
+    /**
+     * @brief Start advertising with previously constructed payload with setAdvPayload
+     *        function.
+     * 
+     * @param advPeriod Period between advertisements in milliseconds. How often
+     *                  to advertise.
+     * @param advDuration Advertisement duration. How long to advertise after first
+     *                    packet. If you want infinite advertisement set this to
+     *                    SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION .
+     * @param restartOnDisc Should advertisement restart if client disconnects.
+     * @return true If advertisement started.
+     * @return false If advertisement failed to start.
+     */
     bool startAdvertisement(uint32_t advPeriod,
                             int32_t advDuration,
                             bool restartOnDisc);
+    /**
+     * @brief Stop advertising.
+     * 
+     * @return true If advertising successfuly stoped.
+     * @return false If failed to stop advertisement.
+     */
     bool stopAdvertisement(void);
+    /**
+     * @brief Set the advertisement payload section. Advertisement payload is
+     *        composed of multiple sections differentiated by type. In order to
+     *        set multiple sections call this function for each one of them.
+     * 
+     * @param type One of the AdvType values. More decsription on payload types
+     *             can be found on official Bluetooth site.
+     * @param data Data to be set under the desired type.
+     * @param dataLen Data length.
+     * @return true If new data was added to the payload.
+     * @return false If an error occured during data adding.
+     */
     bool setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen);
 
+    /**
+     * @brief Set the BLE transmission power.
+     * 
+     * @param dbm Transmission power in dBm.
+     * @return true If transmission power was successfuly set.
+     * @return false If an error occured during transmission power adjustment.
+     */
     bool setTxPower(TxPower dbm);
 
+    /**
+     * @brief Add new service to Simple BLE module. If we compare BLE to a filesystem
+     *        services are like folders.
+     * 
+     * @param servUuid Unique service ID.
+     * @return int8_t If successful returns positive service index, if an error
+     *                occured returns negative number.
+     */
     int8_t addService(uint8_t servUuid);
+    /**
+     * @brief Add new characteristic to Simple BLE module under desired service.
+     *        If we compare BLE to a filesystem then characteristics are like files.
+     * 
+     * @param serviceIndex Index of a service under which to add new characteristic.
+     * @param maxSize Maximum size of a characteristic.
+     * @param flags Characteristic flag properties. Arithmetically OR values from
+     *              CharPropFlags enum to get your desired combination of properties.
+     *              Currently tested indicate, notify, read and write.
+     * @return int8_t If successful returns characteristic index by which it can
+     *                be referenced. This index is not unique since multiple characteristics
+     *                from different services can have same indexes. If this function
+     *                fails it returns negative number.
+     */
     int8_t addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags);
 
+    /**
+     * @brief Check if characteristic has any new unread data.
+     * 
+     * @param serviceIndex Service under which is your desired characteristic.
+     * @param charIndex Desired characteristic index.
+     * @return int32_t Positive number if characteristic has some new data to read.
+     *                 Negative if characteristic has no new data to read.
+     */
     int32_t checkChar(uint8_t serviceIndex, uint8_t charIndex);
 
+    /**
+     * @brief Read data from characteristic.
+     * 
+     * @param serviceIndex Service under which is your desired characteristic.
+     * @param charIndex Desired characteristic index.
+     * @param buff Buffer in which to save characteristic data.
+     * @param buffSize Buffer size.
+     * @return int32_t Positive number if characteristic has some new data to read.
+     *                 Negative if characteristic has no new data to read.
+     */
     int32_t readChar(uint8_t serviceIndex, uint8_t charIndex,
                       uint8_t *buff, uint32_t buffSize);
     
+    /**
+     * @brief Write data to a characteristic.
+     * 
+     * @param serviceIndex Service under which is your desired characteristic.
+     * @param charIndex Desired characteristic index.
+     * @param data Buffer with data that should be transfered to desired characteristic.
+     * @param dataSize Data length in buffer.
+     * @return true If data was successfuly sent to Simple BLE module.
+     * @return false If data transmission to module was unsuccessful.
+     */
     bool writeChar(uint8_t serviceIndex, uint8_t charIndex,
                    uint8_t *data, uint32_t dataSize);
 
