@@ -57,11 +57,13 @@ For example ```<commaSepparatedArgumentList>``` could be ```1,3,107``` or ```453
 
 Commands should always end with carriage return character. After carriage return is received by Simple BLE module it will start processing the command. Module always gives echo back, and sends the response to sent command. At the end of command processing ```"OK"``` is always sent to signal that processing of the command is complete and that module is ready for new command. Even if there is an error during processing of the command module will still send the ```"OK"``` . If error did occur during command processing you will also receive ```"ERROR"``` string along with some explanation string.
 
-Module can send responses even when no AT commands requested them. These are called URC, Unsolicited Response Code, because they are not requested but are sent to signal that module internal state changed.
+Module can send responses even when no AT commands requested them. These are called URC, Unsolicited Response Code, because they are not requested but are sent to signal that module internal state changed. URCs start with ```^``` sign, the same as any of the command responses.
 
 One more thing to note is that UART interface receives bytes in batches of 6 in order to be as efficient as possible. For this reason there is a thing called UART receive timeout. If no character is received in more than UART receive timeout time then incomplete batch can be received for processing (less than 6 bytes) . This is great for manual input of commands, but if module is controlled from another source it is probably capable of higher speeds. This is why it is recomended to send aditional dummy characters over UART in order to fill the whole batch of 6 bytes. Simple BLE library takes care of this, but if you are developing your library you should take this into consideration.
 
 ## AT commands
+
+In the table bellow is a list of all currently suported commands, along with some info about each command. Write arguments are written in the order as module expects them over UART interface. Every argument is a base 10 number.
 
 | Command | Read | Write | Switch | Write arguments |
 | ------- | ---- | ----- | ------ | --------------- |
@@ -82,3 +84,34 @@ One more thing to note is that UART interface receives bytes in batches of 6 in 
 ### AT
 
 AT command is used to check if module works and is ready to receive AT commands. It doesn't do anything to the internal module state.
+
+# Simple BLE library
+
+This part of the documentation will focus on the library in this repository.
+
+Simple BLE library is written in a way to be platform independant. We just pass it architecture dependant code like so:
+
+```c++
+static SimpleBLE ble(
+    [](bool state) { digitalWrite(RX_ENABLE_PIN, state ? HIGH : LOW); },
+    [](bool state) { digitalWrite(MODULE_RESET_PIN, state ? HIGH : LOW); },
+    [](char c) { return altSerial.write(c) > 0; },
+    [](char *c)
+    {
+        bool availableChars = altSerial.available() > 0;
+
+        *c = availableChars ? altSerial.read() : *c ;
+
+        return availableChars;
+    },
+    [](void) { return (uint32_t)millis(); },
+    [](uint32_t ms) { delay(ms); },
+    [](const char *dbg) { Serial.print(dbg); }
+);
+```
+
+This can be found in examples folder and is specific to Arduino platform, however, you can specify functions for different platform instead of arduino ones and everything should work. Printing is optional so you can send NULL as the last argument to skip printing command output.
+
+Since ATMega328 has only one hardware UART and we need two, one for printout and one for Simple BLE module, we will use software serial library called [AltSoftSerial](http://www.pjrc.com/teensy/td_libs_AltSoftSerial.html).
+
+
