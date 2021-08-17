@@ -6,7 +6,7 @@ Simple BLE is a Bluetooth module that lets you quickly and simply use BLE in you
 
 # Hardware
 
-Simple BLE module's hardware is based on Nordic's NRF52805 chip which is one of the cheapest BLE options out there, making it ideal even for low budget projects, like hobby projects usualy are.
+SimpleBLE module's hardware is based on Nordic's NRF52805 chip which is one of the cheapest BLE options out there, making it ideal even for low budget projects, like hobby projects usualy are.
 
 Module works with voltages from 1.7V to 3.6V and typical usage is with 3.3V. Power consumption while everything is off is about 1uA. Of course when Bluetooth gets turned on consumption increases based on how often module advertises and is something connected to it. Detailed power consumption info can be found in NRF52805 [datasheet](https://infocenter.nordicsemi.com/pdf/nRF52805_PS_v1.2.pdf "NRF52805 datasheet").
 
@@ -112,6 +112,33 @@ static SimpleBLE ble(
 
 This can be found in examples folder and is specific to Arduino platform, however, you can specify functions for different platform instead of arduino ones and everything should work. Printing is optional so you can send NULL as the last argument to skip printing command output.
 
+Function descriptions can be found in `simple_ble.h`.
+
+## The example
+
+The example in this repository is made for Arduino platform, specificaly for Arduino boards featuring ATMega328 microcontroller. So for Arduino Uno, Nano etc. this example should work without changes, but for other boards adjustements might be needed.
+
 Since ATMega328 has only one hardware UART and we need two, one for printout and one for Simple BLE module, we will use software serial library called [AltSoftSerial](http://www.pjrc.com/teensy/td_libs_AltSoftSerial.html).
 
+Example shows how to initialize and work with SimpleBLE module. When started it begins advertising its name, `SimpleBLE example`, over Bluetooth. When advertising begins it si possible to connect to this device and write to its characteristic, or read from it.
+
+Connecting to this module can be achived easily by using smartphone applications and virtualy every smartphone today has a BLE capability. Nordic's [nRF Connect](https://www.nordicsemi.com/Products/Development-tools/nrf-connect-for-desktop) app is a good example of simple to use but powerful BLE testing application. And it is available both for [Android](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) and for [iOS](https://apps.apple.com/us/app/nrf-connect-for-mobile/id1054362403).
+
+# SimpleBLE developement
+
+SimpleBLE developement can be done on your custom board, or using one of our developement boards. There are two boards available, SimpleBLE breakout board and a SimpleBLE developement kit.
+
+## Breakout board
+
+![SimpleBLE breakout board](./doc/simpleble_breakout.png)
+
+Breakout board features a SimpleBLE module with all useful pins connected to a pin header. It has a 3V3 interface (J2 header) and a 5V interface (J4 header). It can be powered from 5V or from 3V3 voltage sources. RXE pin is enabled by default, and RST pin is pulled high, so when power is applied module will be ready within a few milliseconds. `^START` message is the first message sent over the UART and it indicates that the module has started and is ready to receive commands.
+
+As was mentioned, default state of the module on this breakout board is enabled and receiving commands over UART. Default UART speed is 9600 baud.
+
+Board also features pin header for measuring power consumption (J1 header). Just make sure to desolder R9 before doing the measurements because it bridges header pins. Other than that there is a reset switch SW1 which can be used to hardware reset a module.
+
+## Developement kit
+
+![SimpleBLE breakout board](./doc/simpleble_dk.png)
 
