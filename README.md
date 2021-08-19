@@ -118,7 +118,7 @@ Function descriptions can be found in `simple_ble.h`.
 
 The example in this repository is made for Arduino platform, specificaly for Arduino boards featuring ATMega328 microcontroller. So for Arduino Uno, Nano etc. this example should work without changes, but for other boards adjustements might be needed.
 
-Since ATMega328 has only one hardware UART and we need two, one for printout and one for Simple BLE module, we will use software serial library called [AltSoftSerial](http://www.pjrc.com/teensy/td_libs_AltSoftSerial.html).
+Since ATmega328 has only one hardware UART and we need two, one for printout and one for Simple BLE module, we will use software serial library called [AltSoftSerial](http://www.pjrc.com/teensy/td_libs_AltSoftSerial.html).
 
 Example shows how to initialize and work with SimpleBLE module. When started it begins advertising its name, `SimpleBLE example`, over Bluetooth. When advertising begins it si possible to connect to this device and write to its characteristic, or read from it.
 
@@ -138,7 +138,21 @@ As was mentioned, default state of the module on this breakout board is enabled 
 
 Board also features pin header for measuring power consumption (J1 header). Just make sure to desolder R9 before doing the measurements because it bridges header pins. Other than that there is a reset switch SW1 which can be used to hardware reset a module.
 
+Whole schematic is available in the doc folder [here](./doc/simpleble_lvl_breakout.pdf).
+
 ## Developement kit
 
 ![SimpleBLE breakout board](./doc/simpleble_dk.png)
+
+Developement kit features everything that SimpleBLE breakout has, plus an Arduino integrated for easy developement. SimpleBLE module and ATmega328 are connected by a software serial port [AltSoftSerial](http://www.pjrc.com/teensy/td_libs_AltSoftSerial.html). Hardware serial port is connected to UART to USB chip for printout of debug information.
+
+There is another switch, SW1, that resets only the ATmega. If you need to reset SimpleBLE module you can use SW2.
+
+There is some I/O connected to J3 header if there is a need to control more periphery with your Arduino. Names of the pins correspond to Arduino naming scheme, so there shouldn't be any confusion when developing with Arduino platform.
+
+R8 and R10 jumpers can be disconnected and with that TX and RX pins of UART to USB chip are disconnected from ATmega. Now it can be connected to some external board, or it could be connected to a SimpleBLE module directly if needed.
+
+Dev kit also features a full USB-A connector for easy connection to other devices. It also has a micro USB connector if normal sized USB is not practical. **USBs shouldn't be connected at the same time, it could damage your dev kit.**
+
+Whole schematic is available in the doc folder [here](./doc/simpleble_devboard.pdf).
 
