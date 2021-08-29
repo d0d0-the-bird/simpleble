@@ -156,3 +156,9 @@ Dev kit also features a full USB-A connector for easy connection to other device
 
 Whole schematic is available in the doc folder [here](./doc/simpleble_devboard.pdf).
 
+# Issues and contact
+
+If you have any issues with the library in this repository or with BLE module you can submit your issues on the [issue tracker](https://github.com/d0d0-the-bird/simpleble/issues) in this repositroy.
+
+You can also write an email to [d0d0.addr@gmail.com](d0d0.addr@gmail.com) for any questions, and if you want to get your SimpleBLE modules or developement boards.
+
