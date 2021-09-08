@@ -11,12 +11,12 @@
 void SimpleBLE::activateModuleRx(void)
 {
     internalSetRxEnable(true);
-    internalDelay(9);
+    internalDelay(15);
 }
 void SimpleBLE::deactivateModuleRx(void)
 {
     internalSetRxEnable(false);
-    internalDelay(1);
+    internalDelay(15);
 }
 void SimpleBLE::hardResetModule(void)
 {
