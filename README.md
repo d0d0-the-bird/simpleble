@@ -32,9 +32,9 @@ Module dimensions are expressed in millimeters.
 
 # Module firmware
 
-Simple BLE module is based on Nordic's SDK for BLE and periphery devices. To simplify BLE design most of the BLE parameters are preconfigured and can't be changed. If your application needs to change some of these hardcoded parameters feel free to contact us at [d0d0.addr@gmail.com](d0d0.addr@gmail.com) .
+Simple BLE module is based on Nordic's SDK for BLE and periphery devices. To simplify BLE design most of the BLE parameters are preconfigured and can't be changed. If your application needs to change some of these hardcoded parameters feel free to contact us at [simpleble.com@gmail.com](simpleble.com@gmail.com) .
 
-Simple BLE module is controlled with AT commands through UART interface for simplicity. This does introduce a lot of overhead so if your application requires something different contact us ([d0d0.addr@gmail.com](d0d0.addr@gmail.com)) and we can talk about alternative communication protocols.
+Simple BLE module is controlled with AT commands through UART interface for simplicity. This does introduce a lot of overhead so if your application requires something different contact us ([simpleble.com@gmail.com](simpleble.com@gmail.com)) and we can talk about alternative communication protocols.
 
 ## UART configuration
 
@@ -160,5 +160,5 @@ Whole schematic is available in the doc folder [here](./doc/simpleble_devboard.p
 
 If you have any issues with the library in this repository or with BLE module you can submit your issues on the [issue tracker](https://github.com/d0d0-the-bird/simpleble/issues) in this repositroy.
 
-You can also write an email to [d0d0.addr@gmail.com](d0d0.addr@gmail.com) for any questions, and if you want to get your SimpleBLE modules or developement boards.
+You can also write an email to [simpleble.com@gmail.com](simpleble.com@gmail.com) for any questions, and if you want to get your SimpleBLE modules or developement boards.
 
