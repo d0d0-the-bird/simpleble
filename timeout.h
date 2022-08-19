@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 
-typedef uint32_t (MillisecondC)(void);
+typedef uint32_t (MillisType)(void);
 
 
 /**
@@ -40,24 +40,57 @@ public:
      *                won't be updated.
      * @return MillisecondC* Returns internal millis pointer value.
      */
-    static MillisecondC *init(MillisecondC *millisF)
+    static MillisType **init(MillisType *millisF)
     {
-        static MillisecondC *intMillis = NULL;
-        
+        static MillisType *initInternalMillis = NULL;
+
         if( millisF != NULL )
         {
-            intMillis = millisF;
+            initInternalMillis = millisF;
         }
 
-        return intMillis;
+        return &initInternalMillis;
     }
 
     /**
      * @brief Restarts the timeout counter.
      */
     inline void restart() { startTime = privMillis(); }
+    inline void restart(uint32_t newTimeout)
+    {
+        timeout = newTimeout;
+        restart();
+    }
 
+    /**
+     * @brief Passed time from start of counting.
+     * 
+     * @return uint32_t time passed from timer start
+     */
     inline uint32_t passed(void) { return privMillis() - startTime; }
+
+    /**
+     * @brief Get the remaining time until timeout. If timeout passed return
+     *        with minus sign.
+     * 
+     * @return int32_t remaining time(positive) or overrun time(negative)
+     */
+    inline int32_t remaining(void)
+    {
+        uint32_t passedTime = passed();
+        int32_t retval = timeout - passedTime ;
+
+        if( timeout >= passedTime )
+        {
+            retval = retval < 0 ? INT32_MAX : retval ;
+        }
+        else
+        {
+            retval = retval > 0 ? INT32_MIN : retval ;
+        }
+
+        return retval;
+    }
 
     /**
      * @brief Checks if timeout value expired.
@@ -65,10 +98,7 @@ public:
      * @return true Timeout expired.
      * @return false Timeout still not reached.
      */
-    inline bool expired(void)
-    {
-        return passed() >= timeout ;
-    }
+    inline bool expired(void) { return passed() >= timeout ; }
 
     /**
      * @brief Checks if there is still time before timeout.
@@ -89,10 +119,10 @@ private:
      */
     inline uint32_t privMillis(void)
     {
-        return _millis ? _millis() : 0 ;
+        return *_millis ? (*_millis)() : 0 ;
     }
 
-    MillisecondC *_millis;
+    MillisType **_millis;
 
     uint32_t startTime;
     uint32_t timeout;
