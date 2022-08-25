@@ -2,6 +2,7 @@
 #define __SIMPLE_BLE_H__
 
 #include "at_process.h"
+#include "timeout.h"
 
 #include <stdint.h>
 
@@ -83,7 +84,8 @@ public:
         NOTIFY = 0x10,
         INDICATE = 0x20,
         AUTHENTICATED_SIGNED_WRITES = 0x40,
-        EXTENDED_PROPERTIES = 0x80
+        EXTENDED_PROPERTIES = 0x80,
+        READ_AND_NOTIFY = 0x12
     };
 
     /**
@@ -114,7 +116,7 @@ public:
     ) :
               rxEnabledSetter(rxEnabledSetter),
               moduleResetSetter(moduleResetSetter),
-              at((SerialUART*)&(SerialUART){serialPutter, serialGetter}, delayer, debugPrinter),
+              at(serialPutter, serialGetter, delayer, millisCounterGetter, debugPrinter),
               millisCounterGetter(millisCounterGetter),
               delayer(delayer),
               debugPrinter(debugPrinter)
@@ -143,7 +145,7 @@ public:
      * @brief Initialise pins to initial values and put module to known state.
      * 
      */
-    void begin(void);
+    void begin();
     
     /**
      * @brief Send a command that doesn't need to receive any data.
@@ -271,7 +273,7 @@ public:
     bool setTxPower(TxPower dbm);
 
     /**
-     * @brief Add new service to Simple BLE module. If we compare BLE to a filesystem
+     * @brief Add new service to Simple BLE module. If we compare BLE to a filesystem,
      *        services are like folders.
      * 
      * @param servUuid Unique service ID.
