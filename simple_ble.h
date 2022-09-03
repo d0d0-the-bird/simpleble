@@ -116,7 +116,7 @@ public:
     ) :
               rxEnabledSetter(rxEnabledSetter),
               moduleResetSetter(moduleResetSetter),
-              at(serialPutter, serialGetter, delayer, millisCounterGetter, debugPrinter),
+              at(serialPutter, serialGetter, delayer, millisCounterGetter, NULL),
               millisCounterGetter(millisCounterGetter),
               delayer(delayer),
               debugPrinter(debugPrinter)
