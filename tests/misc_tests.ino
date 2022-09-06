@@ -225,7 +225,7 @@ void setup()
                 Serial.println(millis()/1000/3600.);
             }
             fillValue += 0x11;
-            delay(1000);
+            delay(1);
         }
     }
 
