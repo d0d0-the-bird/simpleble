@@ -15,12 +15,11 @@ static const char cmdError[] = "ERROR\r\n";
 void SimpleBLE::activateModuleRx(void)
 {
     internalSetRxEnable(true);
-    //internalDelay(100);
+    internalDelay(15);
 }
 void SimpleBLE::deactivateModuleRx(void)
 {
-    //internalSetRxEnable(false);
-    //internalDelay(100);
+    internalSetRxEnable(false);
 }
 void SimpleBLE::hardResetModule(void)
 {
