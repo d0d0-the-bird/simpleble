@@ -214,15 +214,20 @@ void setup()
                     break;
                 }
             }
+            unsigned long lastGood = millis();
             if( allGood )
             {
                 Serial.print("All is good ");
-                Serial.println(millis()/1000/3600.);
+                Serial.println(lastGood/1000/3600.);
             }
             else
             {
-                Serial.print("Not all is good ");
-                Serial.println(millis()/1000/3600.);
+                while(1)
+                {              
+                    Serial.print("Not all is good ");
+                    Serial.println(lastGood/1000/3600.);
+                    delay(1000);
+                }
             }
             fillValue += 0x11;
             delay(1);
