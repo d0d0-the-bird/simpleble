@@ -59,6 +59,8 @@ void setup()
     {
         bleReset();
 
+        ble.sendReceiveCmd("AT+STAT?");
+
         Serial.println("Setting adv payload complete local name.");
         const char devName[] = "SimpleBLE example";
         ble.setAdvPayload(SimpleBLE::COMPLETE_LOCAL_NAME, (uint8_t*)devName, sizeof(devName)-1);
