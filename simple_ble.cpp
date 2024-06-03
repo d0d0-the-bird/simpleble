@@ -91,12 +91,6 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
     }
     if( sent > 0 )
     {
-        // Calculate block fill chars.
-        while(sent++ % MODULE_RX_BLOCK_SIZE_B)
-        {
-            at.write((uint8_t)'\0');
-        }
-
         // Now is the time to start checking for read data.
         if( readNWrite && buff )
         {
