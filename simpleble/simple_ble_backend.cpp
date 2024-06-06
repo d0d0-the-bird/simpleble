@@ -1,5 +1,6 @@
 #include "simple_ble.h"
 #include "at_process.h"
+#include "timeout.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,7 +13,7 @@ static const char cmdAck[] = "\nOK\r\n";
 static const char cmdError[] = "ERROR\r\n";
 
 
-SimpleBLEBackend::SimpleBLEBackend(SimpleBLEInterface *ifc) :
+SimpleBLEBackend::SimpleBLEBackend(const SimpleBLEInterface *ifc) :
     ifc(ifc),
     at(ifc->serialPut, ifc->serialGet, ifc->delayMs, ifc->millis, NULL)
 {
@@ -21,18 +22,18 @@ SimpleBLEBackend::SimpleBLEBackend(SimpleBLEInterface *ifc) :
 
 void SimpleBLEBackend::activateModuleRx(void)
 {
-    internalSetRxEnable(true);
-    internalDelay(15);
+    ifc->rxEnabledSet(true);
+    ifc->delayMs(15;)
 }
 void SimpleBLEBackend::deactivateModuleRx(void)
 {
-    internalSetRxEnable(false);
+    ifc->rxEnabledSet(false);
 }
 void SimpleBLEBackend::hardResetModule(void)
 {
-    internalSetModuleReset(false);
-    internalDelay(10);
-    internalSetModuleReset(true);
+    ifc->moduleResetSet(false);
+    ifc->delayMs(10);
+    ifc->moduleResetSet(true);
 }
 
 void SimpleBLEBackend::begin()

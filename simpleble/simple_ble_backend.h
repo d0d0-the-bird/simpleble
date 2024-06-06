@@ -2,10 +2,23 @@
 #define __SIMPLE_BLE_BACKEND_H__
 
 #include "at_process.h"
-#include "timeout.h"
 
 #include <stdint.h>
 
+
+enum class TxPower
+{
+    POW_N40DBM = -40,
+    POW_N20DBM = -20,
+    POW_N16DBM = -16,
+    POW_N12DBM = -12,
+    POW_N8DBM = -8,
+    POW_N4DBM = -4,
+    POW_0DBM = 0,
+    POW_2DBM = 2,
+    POW_3DBM = 3,
+    POW_4DBM = 4
+};
 
 /**
  * @brief Simple BLE interface structure
@@ -27,13 +40,13 @@
  */
 struct SimpleBLEInterface
 {
-    void (*rxEnabledSet)(bool);
-    void (*moduleResetSet)(bool);
-    bool (*serialPut)(char);
-    bool (*serialGet)(char*);
-    uint32_t (*millis)(void);
-    void (*delayMs)(uint32_t);
-    void (*debugPrint)(const char*);
+    void (*const rxEnabledSet)(bool);
+    void (*const moduleResetSet)(bool);
+    bool (*const serialPut)(char);
+    bool (*const serialGet)(char*);
+    uint32_t (*const millis)(void);
+    void (*const delayMs)(uint32_t);
+    void (*const debugPrint)(const char*);
 };
 
 
@@ -80,20 +93,6 @@ public:
         MANUFACTURER_SPECIFIC_DATA = 0xFF
     };
 
-    enum TxPower
-    {
-        POW_N40DBM = -40,
-        POW_N20DBM = -20,
-        POW_N16DBM = -16,
-        POW_N12DBM = -12,
-        POW_N8DBM = -8,
-        POW_N4DBM = -4,
-        POW_0DBM = 0,
-        POW_2DBM = 2,
-        POW_3DBM = 3,
-        POW_4DBM = 4
-    };
-
     enum CharPropFlags
     {
         NONE = 0x00,
@@ -137,7 +136,7 @@ public:
      * 
      */
     void begin();
-    
+
     /**
      * @brief Send a command that doesn't need to receive any data.
      * 
@@ -217,6 +216,7 @@ public:
      * @return false If and error occured during module restart.
      */
     bool softRestart(void);
+
     /**
      * @brief Start advertising with previously constructed payload with setAdvPayload
      *        function.
@@ -233,6 +233,7 @@ public:
     bool startAdvertisement(uint32_t advPeriod,
                             int32_t advDuration,
                             bool restartOnDisc);
+
     /**
      * @brief Stop advertising.
      * 
@@ -240,6 +241,7 @@ public:
      * @return false If failed to stop advertisement.
      */
     bool stopAdvertisement(void);
+
     /**
      * @brief Set the advertisement payload section. Advertisement payload is
      *        composed of multiple sections differentiated by type. In order to
@@ -272,6 +274,7 @@ public:
      *                occured returns negative number.
      */
     int8_t addService(uint8_t servUuid);
+
     /**
      * @brief Add new characteristic to Simple BLE module under desired service.
      *        If we compare BLE to a filesystem then characteristics are like files.
@@ -310,7 +313,7 @@ public:
      */
     int32_t readChar(uint8_t serviceIndex, uint8_t charIndex,
                       uint8_t *buff, uint32_t buffSize);
-    
+
     /**
      * @brief Write data to a characteristic.
      * 
@@ -326,27 +329,11 @@ public:
 
 private:
 
-    inline void internalSetRxEnable(bool state)
-    {
-        rxEnabledSetter(state);
-    }
-    inline void internalSetModuleReset(bool state)
-    {
-        moduleResetSetter(state);
-    }
-    inline uint32_t internalMillis(void)
-    {
-        return millisCounterGetter();
-    }
-    inline void internalDelay(uint32_t ms)
-    {
-        delayer(ms);
-    }
     inline void internalDebug(const char *dbgPrint)
     {
-        if( debugPrinter )
+        if( ifc->debugPrint )
         {
-            debugPrinter(dbgPrint);
+            ifc->debugPrint(dbgPrint);
         }
     }
 
