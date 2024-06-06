@@ -1,17 +1,44 @@
-#ifndef __SIMPLE_BLE_H__
-#define __SIMPLE_BLE_H__
+#ifndef __SIMPLE_BLE_BACKEND_H__
+#define __SIMPLE_BLE_BACKEND_H__
 
-#include "simple_ble_backend.h"
 #include "at_process.h"
 #include "timeout.h"
 
 #include <stdint.h>
 
 
-#define SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION                   (0)
+/**
+ * @brief Simple BLE interface structure
+ * 
+ * @param rxEnabledSet Function pointer to a function that sets and clears
+ *                     RX enabled pin.
+ * @param moduleResetSet Function pointer to a function that sets and clears
+ *                       module reset pin.
+ * @param serialPut Function pointer to a function that puts one char to
+ *                  serial interface.
+ * @param serialGet Function pointer to a function that receives one character
+ *                  from serial interface.
+ * @param millis Function pointer to a function that gets total
+ *               elapsed milliseconds from start of the program.
+ * @param delayMs Function pointer to a function that delays further execution
+ *                by specified number of milliseconds.
+ * @param debugPrint Optional Function pointer to a function that prints
+ *                   various debug information to desired output.
+ */
+struct SimpleBLEInterface
+{
+    void (*rxEnabledSet)(bool);
+    void (*moduleResetSet)(bool);
+    bool (*serialPut)(char);
+    bool (*serialGet)(char*);
+    uint32_t (*millis)(void);
+    void (*delayMs)(uint32_t);
+    void (*debugPrint)(const char*);
+};
 
 
-class SimpleBLE
+
+class SimpleBLEBackend
 {
 public:
     enum AdvType
@@ -86,8 +113,7 @@ public:
      * 
      * @param ifc Complete SimpleBLE interface, with all external dependancies.
      */
-    SimpleBLE(const SimpleBLEInterface *ifc) : backend(ifc)
-    {}
+    SimpleBLEBackend(const SimpleBLEInterface *ifc);
 
     /**
      * @brief Activate module serial reception of data.
@@ -298,9 +324,40 @@ public:
     bool writeChar(uint8_t serviceIndex, uint8_t charIndex,
                    uint8_t *data, uint32_t dataSize);
 
+private:
 
-    SimpleBLEBackend backend;
+    inline void internalSetRxEnable(bool state)
+    {
+        rxEnabledSetter(state);
+    }
+    inline void internalSetModuleReset(bool state)
+    {
+        moduleResetSetter(state);
+    }
+    inline uint32_t internalMillis(void)
+    {
+        return millisCounterGetter();
+    }
+    inline void internalDelay(uint32_t ms)
+    {
+        delayer(ms);
+    }
+    inline void internalDebug(const char *dbgPrint)
+    {
+        if( debugPrinter )
+        {
+            debugPrinter(dbgPrint);
+        }
+    }
+
+    const char *findCmdReturnStatus(const char *cmdRet, const char *statStart);
+    void debugPrint(const char *str);
+
+    const SimpleBLEInterface *ifc;
+
+    AtProcess at;
+
 };
 
 
-#endif//__SIMPLE_BLE_H__
+#endif//__SIMPLE_BLE_BACKEND_H__
