@@ -23,12 +23,7 @@ public:
      * 
      * @param timeout Timeout to check for in milliseconds.
      */
-    Timeout(uint32_t timeout) : timeout(timeout)
-    {
-        _millis = init(NULL);
-
-        restart();
-    }
+    Timeout(uint32_t timeout);
 
     // Call this before any other calls.
     /**
@@ -40,17 +35,7 @@ public:
      *                won't be updated.
      * @return MillisecondC* Returns internal millis pointer value.
      */
-    static MillisType **init(MillisType *millisF)
-    {
-        static MillisType *initInternalMillis = NULL;
-
-        if( millisF != NULL )
-        {
-            initInternalMillis = millisF;
-        }
-
-        return &initInternalMillis;
-    }
+    static void init(MillisType *millisF);
 
     /**
      * @brief Restarts the timeout counter.
@@ -75,22 +60,7 @@ public:
      * 
      * @return int32_t remaining time(positive) or overrun time(negative)
      */
-    inline int32_t remaining(void)
-    {
-        uint32_t passedTime = passed();
-        int32_t retval = timeout - passedTime ;
-
-        if( timeout >= passedTime )
-        {
-            retval = retval < 0 ? INT32_MAX : retval ;
-        }
-        else
-        {
-            retval = retval > 0 ? INT32_MIN : retval ;
-        }
-
-        return retval;
-    }
+    int32_t remaining(void);
 
     /**
      * @brief Checks if timeout value expired.
@@ -122,7 +92,7 @@ private:
         return *_millis ? (*_millis)() : 0 ;
     }
 
-    MillisType **_millis;
+    static MillisType *_millis;
 
     uint32_t startTime;
     uint32_t timeout;
