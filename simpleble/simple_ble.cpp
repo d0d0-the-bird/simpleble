@@ -12,9 +12,36 @@ static const char cmdAck[] = "\nOK\r\n";
 static const char cmdError[] = "ERROR\r\n";
 
 
+
+#ifdef ARDUINO
+static const SimpleBLEInterface SimpleBLE::arduinoIf = {
+    [](bool state) { digitalWrite(RX_ENABLE_PIN, state ? HIGH : LOW); },
+    [](bool state) { digitalWrite(MODULE_RESET_PIN, state ? HIGH : LOW); },
+    [](char c) { return altSerial.write(c) > 0; },
+    [](char *c)
+    {
+        bool availableChars = altSerial.available() > 0;
+
+        *c = availableChars ? altSerial.read() : *c ;
+
+        return availableChars;
+    },
+    [](void) { return (uint32_t)millis(); },
+    [](uint32_t ms) { delay(ms); },
+    [](const char *dbg) { Serial.print(dbg); }
+};
+#endif //ARDUINO
+
 bool SimpleBLE::begin()
 {
     bool retval = false;
+
+#ifdef ARDUINO
+    pinMode(RX_ENABLE_PIN, OUTPUT);
+    pinMode(MODULE_RESET_PIN, OUTPUT);
+
+    altSerial.begin(9600);
+#endif //ARDUINO
 
     backend.begin();
 
@@ -99,4 +126,12 @@ bool SimpleBLE::setTxPower(SimpleBLE::TxPower dbm)
     }
 
     return backend.setTxPower(bkdDbm);
+}
+
+bool SimpleBLE::setDeviceName(const char* newName)
+{
+    return backend.setAdvPayload(
+            SimpleBLEBackend::COMPLETE_LOCAL_NAME,
+            (uint8_t*)newName,
+            strlen(newName));
 }

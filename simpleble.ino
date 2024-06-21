@@ -1,93 +1,118 @@
 #include "Arduino.h"
-#include "AltSoftSerial.h"
 
 #include "simpleble/simple_ble.h"
 
 
-// AltSoft lib uses these RX and TX pins for communication but it doesn't
-// realy nead them to be defined here. This is just for reference.
-#define RX_PIN 8
-#define TX_PIN 9
-#define RX_ENABLE_PIN 10
-#define MODULE_RESET_PIN 11
+static SimpleBLE ble;
 
-
-static AltSoftSerial altSerial;
-
-const static SimpleBLEInterface simpleBleIf =
-{
-    [](bool state) { digitalWrite(RX_ENABLE_PIN, state ? HIGH : LOW); },
-    [](bool state) { digitalWrite(MODULE_RESET_PIN, state ? HIGH : LOW); },
-    [](char c) { return altSerial.write(c) > 0; },
-    [](char *c)
-    {
-        bool availableChars = altSerial.available() > 0;
-
-        *c = availableChars ? altSerial.read() : *c ;
-
-        return availableChars;
-    },
-    [](void) { return (uint32_t)millis(); },
-    [](uint32_t ms) { delay(ms); },
-    [](const char *dbg) { Serial.print(dbg); }
-};
-
-static SimpleBLE ble(
-    &simpleBleIf
-);
-
-void bleReset()
-{
-    delay(10);
-}
-
-int exampleService = -1;
-int exampleChar = -1;
+// Storage for IDs of your data tanks
+SimpleBLE::TankId secondsTankId;
+SimpleBLE::TankId counterTankId;
+SimpleBLE::TankId buttonTankId;
 
 
 void setup()
 {
-    pinMode(RX_ENABLE_PIN, OUTPUT);
-    pinMode(MODULE_RESET_PIN, OUTPUT);
-
     Serial.begin(115200);
-    altSerial.begin(9600);
 
     Serial.println("Example started");
 
     ble.begin();
 
-    Serial.println("Reseting the device");
-    ble.softRestart();
-
-    Serial.println("Setting TX power");
-    ble.setTxPower(SimpleBLE::POW_0DBM);
-
-    Serial.println("Adding the service");
-    exampleService = ble.addService(0xA0);
-    Serial.print("Added service: ");
-    Serial.println(exampleService);
-
-    if( exampleService >= 0 )
+    secondsTankId = ble.addTank(SimpleBLE::READ, 15);
+    if( secondsTankId == SimpleBLE::INVALID_TANK_ID )
     {
-        exampleChar = ble.addChar(
-            exampleService,
-            20,
-            SimpleBLE::READ | SimpleBLE::WRITE | SimpleBLE::NOTIFY);
-
-        Serial.print("Added characteristic: ");
-        Serial.println(exampleChar);
+        Serial.println("Failed to add seconds tank.");
     }
 
-    const char devName[] = "SimpleBLE example";
-    ble.setAdvPayload(SimpleBLE::COMPLETE_LOCAL_NAME, (uint8_t*)devName, sizeof(devName)-1);
+    counterTankId = ble.addTank(SimpleBLE::READ, 15);
+    if( counterTankId == SimpleBLE::INVALID_TANK_ID )
+    {
+        Serial.println("Failed to add counter tank.");
+    }
+
+    buttonTankId = ble.addTank(SimpleBLE::WRITE_WITH_RESPONSE, 1);
+    if( buttonTankId == SimpleBLE::INVALID_TANK_ID )
+    {
+        Serial.println("Failed to add button tank.");
+    }
+
+    Serial.println("Added all data tanks");
 
     Serial.println("Starting advertisement.");
-    ble.startAdvertisement(100, SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION, true);
+    ble.setDeviceName("SimpleBLE example");
+    ble.startAdvertisement(100, SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION);
 }
 
 void loop()
 {
+    if( ble.getAtInterface()->waitURC("^CHARWRITE", urcBuff, sizeof(urcBuff), 1000) > 0 )
+            {
+                char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
+
+                // Convert char to char number (0:'^' 1:'C' ... 10:':' 11:' ' 12:'X' 14:'X')
+                uint8_t writtenChar = urcStart[14] - '0' ;
+                uint8_t writtenSize = urcStart[16] - '0' ;
+
+                uint8_t characteristicData = 0;
+
+                if( ble.readChar(ioServiceId, writtenChar, &characteristicData, writtenSize) > 0)
+                {
+                    if( writtenChar == buttonCharId )
+                    {
+                        buttonEvents.put(characteristicData);
+                    }
+                    else if( writtenChar == switchCharId )
+                    {
+                        switchEvents.put(characteristicData);
+                    }
+                    else if( writtenChar == sliderCharId )
+                    {
+                        sliderEvents.put(characteristicData);
+                    }
+                }
+            }
+            if( checkcomm.expired() )
+            {
+                bool commCheck = false;
+                do{
+                    if( ble.sendReceiveCmd("AT", 100) == AtProcess::SUCCESS )
+                    {
+                        //setScore("S");
+                        commCheck = true;
+                    }
+                    else
+                    {
+                        ble.deactivateModuleRx();
+                        vTaskDelay(10);
+                        ble.activateModuleRx();
+                        vTaskDelay(10);
+                        //setScore("F");
+                        commCheck = false;
+                    }
+                }while(!commCheck);
+                checkcomm.restart();
+            }
+            if( scoreBuff[0] )
+            {
+                scoreBuff[sizeof(scoreBuff)-1] = '\0'; // Null terminate string just in case
+                ble.writeChar(ioServiceId, scoreCharId, (uint8_t*)scoreBuff, strlen(scoreBuff));
+                scoreBuff[0] = '\0';
+            }
+            if( gameNameBuff[0] )
+            {
+                gameNameBuff[sizeof(gameNameBuff)-1] = '\0'; // Null terminate string just in case
+                ble.writeChar(ioServiceId, gameCharId, (uint8_t*)gameNameBuff, strlen(gameNameBuff));
+                gameNameBuff[0] = '\0';
+            }
+
+            // Take the notification and go to low power more
+            if( !isAccActive() )
+            {
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(0));
+                ble.deactivateModuleRx();
+                lpEnableSleep();
+            }
     
     delay(10);
 }

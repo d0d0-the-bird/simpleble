@@ -1,6 +1,11 @@
 #ifndef __SIMPLE_BLE_H__
 #define __SIMPLE_BLE_H__
 
+#ifdef ARDUINO
+#include "Arduino.h"
+#include "AltSoftSerial.h"
+#endif //ARDUINO
+
 #include "simple_ble_backend.h"
 
 #include <stdint.h>
@@ -45,8 +50,11 @@ public:
      * 
      * @param ifc Complete SimpleBLE interface, with all external dependancies.
      */
-    SimpleBLE(const SimpleBLEInterface *ifc) : backend(ifc)
-    {}
+#ifdef ARDUINO
+    SimpleBLE() : backend(&arduinoIf) {}
+#else //ARDUINO
+    SimpleBLE(const SimpleBLEInterface *ifc) : backend(ifc) {}
+#endif //ARDUINO
 
     /**
      * @brief Exit ULTRA LOW POWER mode on the module. Module UART interface
@@ -104,7 +112,7 @@ public:
      */
     inline bool startAdvertisement(uint32_t advPeriod,
                                    int32_t advDuration,
-                                   bool restartOnDisc)
+                                   bool restartOnDisc = true)
     { backend.startAdvertisement(advPeriod, advDuration, restartOnDisc); }
     /**
      * @brief Stop advertising.
@@ -123,10 +131,26 @@ public:
      */
     bool setTxPower(TxPower dbm);
 
+    bool setDeviceName(const char* newName);
 
     SimpleBLEBackend backend;
 
     int8_t tanksServiceIndex;
+
+#ifdef ARDUINO
+private:
+// AltSoft lib uses these RX and TX pins for communication but it doesn't
+// realy nead them to be defined here. This is just for reference.
+    static const int RX_PIN = 8;
+    static const int TX_PIN = 9;
+    static const int RX_ENABLE_PIN = 10;
+    static const int MODULE_RESET_PIN = 11;
+
+    static AltSoftSerial altSerial;
+
+    static const SimpleBLEInterface arduinoIf;
+public:
+#endif //ARDUINO
 };
 
 

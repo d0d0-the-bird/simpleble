@@ -23,7 +23,7 @@ SimpleBLEBackend::SimpleBLEBackend(const SimpleBLEInterface *ifc) :
 void SimpleBLEBackend::activateModuleRx(void)
 {
     ifc->rxEnabledSet(true);
-    ifc->delayMs(15;)
+    ifc->delayMs(15);
 }
 void SimpleBLEBackend::deactivateModuleRx(void)
 {
