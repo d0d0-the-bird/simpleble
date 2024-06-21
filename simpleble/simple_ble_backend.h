@@ -6,20 +6,6 @@
 #include <stdint.h>
 
 
-enum class TxPower
-{
-    POW_N40DBM = -40,
-    POW_N20DBM = -20,
-    POW_N16DBM = -16,
-    POW_N12DBM = -12,
-    POW_N8DBM = -8,
-    POW_N4DBM = -4,
-    POW_0DBM = 0,
-    POW_2DBM = 2,
-    POW_3DBM = 3,
-    POW_4DBM = 4
-};
-
 /**
  * @brief Simple BLE interface structure
  * 
@@ -54,6 +40,8 @@ struct SimpleBLEInterface
 class SimpleBLEBackend
 {
 public:
+    static const int8_t INVALID_SERVICE_INDEX = -1;
+
     enum AdvType
     {
         INVALID_TYPE = 0x00,
@@ -105,6 +93,20 @@ public:
         AUTHENTICATED_SIGNED_WRITES = 0x40,
         EXTENDED_PROPERTIES = 0x80,
         READ_AND_NOTIFY = 0x12
+    };
+
+    enum TxPower
+    {
+        POW_N40DBM = -40,
+        POW_N20DBM = -20,
+        POW_N16DBM = -16,
+        POW_N12DBM = -12,
+        POW_N8DBM = -8,
+        POW_N4DBM = -4,
+        POW_0DBM = 0,
+        POW_2DBM = 2,
+        POW_3DBM = 3,
+        POW_4DBM = 4
     };
 
     /**
@@ -327,6 +329,10 @@ public:
     bool writeChar(uint8_t serviceIndex, uint8_t charIndex,
                    uint8_t *data, uint32_t dataSize);
 
+    const SimpleBLEInterface *ifc;
+
+    AtProcess at;
+
 private:
 
     inline void internalDebug(const char *dbgPrint)
@@ -339,10 +345,6 @@ private:
 
     const char *findCmdReturnStatus(const char *cmdRet, const char *statStart);
     void debugPrint(const char *str);
-
-    const SimpleBLEInterface *ifc;
-
-    AtProcess at;
 
 };
 

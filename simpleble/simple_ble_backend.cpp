@@ -45,7 +45,6 @@ void SimpleBLEBackend::begin()
     };
     at.init(&s);
     deactivateModuleRx();
-    hardResetModule();
 }
 
 AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
@@ -232,7 +231,7 @@ bool SimpleBLEBackend::setTxPower(TxPower dbm)
 
 int8_t SimpleBLEBackend::addService(uint8_t servUuid)
 {
-    int8_t srvIndex = -1;
+    int8_t srvIndex = INVALID_SERVICE_INDEX;
 
     char cmdStr[50] = "AT+ADDSRV=";
     char helpStr[20];

@@ -8,10 +8,37 @@
 
 #define SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION                   (0)
 
+#define TANKS_SERVICE_UUID                                          (0xA0)
+
 
 class SimpleBLE
 {
 public:
+
+    typedef int8_t TankId;
+
+    enum TankType
+    {
+        READ,
+        WRITE,
+        WRITE_WITH_RESPONSE
+    };
+
+    enum TxPower
+    {
+        POW_N40DBM = -40,
+        POW_N20DBM = -20,
+        POW_N16DBM = -16,
+        POW_N12DBM = -12,
+        POW_N8DBM = -8,
+        POW_N4DBM = -4,
+        POW_0DBM = 0,
+        POW_2DBM = 2,
+        POW_3DBM = 3,
+        POW_4DBM = 4
+    };
+
+    static const TankId INVALID_TANK_ID = -1;
 
     /**
      * @brief Construct a new Simple BLE object
@@ -22,15 +49,23 @@ public:
     {}
 
     /**
-     * @brief Activate module serial reception of data.
+     * @brief Exit ULTRA LOW POWER mode on the module. Module UART interface
+     * becomes active again and we can communicate with it.
      * 
      */
-    inline void activateModuleRx(void) { backend.activateModuleRx(); }
+    inline void exitUltraLowPower(void) { backend.activateModuleRx(); }
     /**
-     * @brief Deactivate module serial reception of data to save power.
+     * @brief Enter ULTRA LOW POWER mode on the module. This will disable the UART
+     * interface and all communication to the module will be disabled. All other
+     * module functionality remains as is and module keeps advertising if
+     * advertisement was started.
+     * 
+     * @note Even in ULP mode module will still send URC messages over UART.
+     * @note ULP power consumption depends on the module configuration. If
+     *       advertisement interval is very short power consumption will be high.
      * 
      */
-    inline void deactivateModuleRx(void) { backend.deactivateModuleRx(); }
+    inline void enterUltraLowPower(void) { backend.deactivateModuleRx(); }
     /**
      * @brief Reset the module via reset pin. Do this only if software reset
      *        doesn't work.
@@ -42,7 +77,9 @@ public:
      * @brief Initialise pins to initial values and put module to known state.
      * 
      */
-    void begin();
+    bool begin();
+
+    TankId addTank(TankType type, uint32_t maxSizeBytes);
 
     /**
      * @brief Restart Simple BLE module via builtin command.
@@ -84,10 +121,12 @@ public:
      * @return true If transmission power was successfuly set.
      * @return false If an error occured during transmission power adjustment.
      */
-    inline bool setTxPower(TxPower dbm) { backend.setTxPower(dbm); }
+    bool setTxPower(TxPower dbm);
 
 
     SimpleBLEBackend backend;
+
+    int8_t tanksServiceIndex;
 };
 
 
