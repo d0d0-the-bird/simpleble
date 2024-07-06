@@ -71,7 +71,7 @@ void loop()
         SimpleBLE::TankData updatedTank = ble.manageUpdates(10);
         if( updatedTank.getId() == buttonTankId )
             buttonState = !!(updatedTank[0]);
-        
+
         String btnState(buttonState ? "down" : "up");
         ble.writeTank(btnStateTankId, btnState.c_str(), btnState.length());
     }
