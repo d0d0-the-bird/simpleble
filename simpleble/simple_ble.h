@@ -22,11 +22,60 @@ public:
 
     typedef int8_t TankId;
 
+#ifdef ARDUINO
+    class TankData
+    {
+    public:
+        // Constructor
+        TankData(uint32_t size) :
+            id(SimpleBLE::INVALID_TANK_ID),
+            size(size),
+            data(size > 0 ? new uint8_t[size] : nullptr)
+        {}
+
+        TankData(SimpleBLE::TankId validId, uint32_t size) : TankData(size)
+        {
+            id = validId;
+        }
+
+        // Copy constructor
+        TankData(const TankData& other) : TankData(other.id, other.size)
+        {
+            if( data ) memcpy(data, other.data, size);
+        }
+
+        // Destructor
+        ~TankData() { delete[] data; }
+
+        SimpleBLE::TankId getId() { return id; }
+
+        // Function to get the size of the buffer
+        uint32_t getSize() const { return size; }
+
+        // Function to get a pointer to the data buffer
+        uint8_t* getData() { return data; }
+
+        // Function to get a const pointer to the data buffer
+        const uint8_t* getData() const { return data; }
+
+        // Indexing operator for non-const access
+        uint8_t& operator[](size_t index) { return data[index]; }
+
+        // Indexing operator for const access
+        const uint8_t& operator[](size_t index) const { return data[index]; }
+
+    private:
+        SimpleBLE::TankId id;
+        uint32_t size;
+        uint8_t* data;
+    };
+#endif //ARDUINO
+
     enum TankType
     {
         READ,
         WRITE,
-        WRITE_WITH_RESPONSE
+        WRITE_CONFIRMED
     };
 
     enum TxPower
@@ -95,32 +144,32 @@ public:
      * @return true If module successfuly restarted.
      * @return false If and error occured during module restart.
      */
-    bool softRestart(void) { backend.softRestart(); }
+    bool softRestart(void) { return backend.softRestart(); }
 
     /**
      * @brief Start advertising with previously constructed payload with setAdvPayload
      *        function.
      * 
-     * @param advPeriod Period between advertisements in milliseconds. How often
+     * @param advPeriodMs Period between advertisements in milliseconds. How often
      *                  to advertise.
-     * @param advDuration Advertisement duration. How long to advertise after first
+     * @param advDurationMs Advertisement duration. How long to advertise after first
      *                    packet. If you want infinite advertisement set this to
      *                    SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION .
      * @param restartOnDisc Should advertisement restart if client disconnects.
      * @return true If advertisement started.
      * @return false If advertisement failed to start.
      */
-    inline bool startAdvertisement(uint32_t advPeriod,
-                                   int32_t advDuration,
+    inline bool startAdvertisement(uint32_t advPeriodMs,
+                                   int32_t advDurationMs = SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION,
                                    bool restartOnDisc = true)
-    { backend.startAdvertisement(advPeriod, advDuration, restartOnDisc); }
+    { return backend.startAdvertisement(advPeriodMs, advDurationMs, restartOnDisc); }
     /**
      * @brief Stop advertising.
      * 
      * @return true If advertising successfuly stoped.
      * @return false If failed to stop advertisement.
      */
-    inline bool stopAdvertisement(void) { backend.stopAdvertisement(); }
+    inline bool stopAdvertisement(void) { return backend.stopAdvertisement(); }
 
     /**
      * @brief Set the BLE transmission power.
@@ -132,6 +181,35 @@ public:
     bool setTxPower(TxPower dbm);
 
     bool setDeviceName(const char* newName);
+
+    bool waitUpdates(TankId* tank, uint32_t* updateSize=NULL, uint32_t timeout=1000);
+
+    /**
+     * @brief Read data from tank.
+     * 
+     * @param tank Id of a tank we want to read.
+     * @param buff Buffer in which to save tank data.
+     * @param buffSize Buffer size.
+     * @param readLen If not NULL, length of data read from a tank
+     * @return bool false if no new data is read from a tank, true if new data is
+     *              read from a tank
+     */
+    bool readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t* readLen=NULL);
+
+    /**
+     * @brief Write data to a tank.
+     * 
+     * @param tank Id of a tank we want to write.
+     * @param data Buffer with data that should be transfered to desired tank.
+     * @param dataSize Data length in buffer.
+     * @return true If data was successfuly sent to Simple BLE module.
+     * @return false If data transmission to module was unsuccessful.
+     */
+    bool writeTank(TankId tank, uint8_t *data, uint32_t dataSize);
+
+#ifdef ARDUINO
+    TankData manageUpdates(uint32_t timeout=1000);
+#endif //ARDUINO
 
     SimpleBLEBackend backend;
 

@@ -329,6 +329,9 @@ public:
     bool writeChar(uint8_t serviceIndex, uint8_t charIndex,
                    uint8_t *data, uint32_t dataSize);
 
+    bool waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
+                        uint32_t* dataSize, uint32_t timeout=1000);
+
     const SimpleBLEInterface *ifc;
 
     AtProcess at;

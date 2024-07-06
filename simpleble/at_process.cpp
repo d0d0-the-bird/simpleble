@@ -138,6 +138,8 @@ uint32_t AtProcess::getLine(
             {
                 break;
             }
+
+            respTimeout.restart();
         }
         else
         {

@@ -85,8 +85,6 @@ AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
         response[0] = '\0';
     }
 
-    activateModuleRx();
-
     // We will get an echo of this command uninterrupted with URCs because we
     // send it quickly.
     uint32_t sent = at.sendCommand(cmd);
@@ -131,8 +129,6 @@ AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
 
         cmdStatus = at.recvResponseWaitOk(timeout, response, 100);
     }
-
-    deactivateModuleRx();
 
     return cmdStatus;
 }
@@ -359,6 +355,29 @@ bool SimpleBLEBackend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
     return retval;
 }
 
+bool SimpleBLEBackend::waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
+                                  uint32_t* dataSize, uint32_t timeout)
+{
+    bool retval = false;
+
+    char urcBuff[40];
+
+    if( at.waitURC("^CHARWRITE", urcBuff, sizeof(urcBuff), timeout) > 0 )
+    {
+        char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
+        char *infoParse = &urcStart[12];
+
+        *serviceIndex = atoi(infoParse);
+        infoParse = strpbrk(infoParse, ",") + 1;
+        *charIndex = atoi(infoParse);
+        infoParse = strpbrk(infoParse, ",") + 1;
+        *dataSize = atoi(infoParse);
+
+        retval = true;
+    }
+
+    return retval;
+}
 
 const char *SimpleBLEBackend::findCmdReturnStatus(const char *cmdRet, const char *statStart)
 {

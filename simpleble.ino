@@ -7,9 +7,8 @@ static SimpleBLE ble;
 
 // Storage for IDs of your data tanks
 SimpleBLE::TankId secondsTankId;
-SimpleBLE::TankId counterTankId;
+SimpleBLE::TankId btnStateTankId;
 SimpleBLE::TankId buttonTankId;
-
 
 void setup()
 {
@@ -17,102 +16,68 @@ void setup()
 
     Serial.println("Example started");
 
-    ble.begin();
+    // Begin BLE. UART speed is at 9600 by default
+    if( !ble.begin() )
+    {
+        Serial.println("Failed to initialise SimpleBLE.");
+        delay(10); exit(1);
+    }
 
     secondsTankId = ble.addTank(SimpleBLE::READ, 15);
     if( secondsTankId == SimpleBLE::INVALID_TANK_ID )
     {
         Serial.println("Failed to add seconds tank.");
+        delay(10); exit(1);
     }
 
-    counterTankId = ble.addTank(SimpleBLE::READ, 15);
-    if( counterTankId == SimpleBLE::INVALID_TANK_ID )
+    btnStateTankId = ble.addTank(SimpleBLE::READ, 15);
+    if( btnStateTankId == SimpleBLE::INVALID_TANK_ID )
     {
-        Serial.println("Failed to add counter tank.");
+        Serial.println("Failed to add button state tank.");
+        delay(10); exit(1);
     }
 
-    buttonTankId = ble.addTank(SimpleBLE::WRITE_WITH_RESPONSE, 1);
+    buttonTankId = ble.addTank(SimpleBLE::WRITE_CONFIRMED, 1);
     if( buttonTankId == SimpleBLE::INVALID_TANK_ID )
     {
         Serial.println("Failed to add button tank.");
+        delay(10); exit(1);
     }
 
     Serial.println("Added all data tanks");
+    Serial.print("Seconds Tank ID: "); Serial.println(secondsTankId);
+    Serial.print("Button state Tank ID: "); Serial.println(btnStateTankId);
+    Serial.print("Button Tank ID: "); Serial.println(buttonTankId);
 
     Serial.println("Starting advertisement.");
     ble.setDeviceName("SimpleBLE example");
-    ble.startAdvertisement(100, SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION);
+    ble.startAdvertisement(300);
 }
+
+bool buttonState = false;
 
 void loop()
 {
-    if( ble.getAtInterface()->waitURC("^CHARWRITE", urcBuff, sizeof(urcBuff), 1000) > 0 )
-            {
-                char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
+    SimpleBLE::TankData updatedTank = ble.manageUpdates();
 
-                // Convert char to char number (0:'^' 1:'C' ... 10:':' 11:' ' 12:'X' 14:'X')
-                uint8_t writtenChar = urcStart[14] - '0' ;
-                uint8_t writtenSize = urcStart[16] - '0' ;
+    Serial.print("Got update from tank "); Serial.print(updatedTank.getId());
+    Serial.print(" data "); Serial.println(updatedTank[0]);
 
-                uint8_t characteristicData = 0;
+    if( updatedTank.getId() == buttonTankId )
+    {
+        buttonState = !!(updatedTank[0]);
 
-                if( ble.readChar(ioServiceId, writtenChar, &characteristicData, writtenSize) > 0)
-                {
-                    if( writtenChar == buttonCharId )
-                    {
-                        buttonEvents.put(characteristicData);
-                    }
-                    else if( writtenChar == switchCharId )
-                    {
-                        switchEvents.put(characteristicData);
-                    }
-                    else if( writtenChar == sliderCharId )
-                    {
-                        sliderEvents.put(characteristicData);
-                    }
-                }
-            }
-            if( checkcomm.expired() )
-            {
-                bool commCheck = false;
-                do{
-                    if( ble.sendReceiveCmd("AT", 100) == AtProcess::SUCCESS )
-                    {
-                        //setScore("S");
-                        commCheck = true;
-                    }
-                    else
-                    {
-                        ble.deactivateModuleRx();
-                        vTaskDelay(10);
-                        ble.activateModuleRx();
-                        vTaskDelay(10);
-                        //setScore("F");
-                        commCheck = false;
-                    }
-                }while(!commCheck);
-                checkcomm.restart();
-            }
-            if( scoreBuff[0] )
-            {
-                scoreBuff[sizeof(scoreBuff)-1] = '\0'; // Null terminate string just in case
-                ble.writeChar(ioServiceId, scoreCharId, (uint8_t*)scoreBuff, strlen(scoreBuff));
-                scoreBuff[0] = '\0';
-            }
-            if( gameNameBuff[0] )
-            {
-                gameNameBuff[sizeof(gameNameBuff)-1] = '\0'; // Null terminate string just in case
-                ble.writeChar(ioServiceId, gameCharId, (uint8_t*)gameNameBuff, strlen(gameNameBuff));
-                gameNameBuff[0] = '\0';
-            }
-
-            // Take the notification and go to low power more
-            if( !isAccActive() )
-            {
-                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(0));
-                ble.deactivateModuleRx();
-                lpEnableSleep();
-            }
-    
-    delay(10);
+        // For catching fast updates, our UART speed is a bit too low
+        SimpleBLE::TankData updatedTank = ble.manageUpdates(10);
+        if( updatedTank.getId() == buttonTankId )
+            buttonState = !!(updatedTank[0]);
+        
+        String btnState(buttonState ? "down" : "up");
+        ble.writeTank(btnStateTankId, btnState.c_str(), btnState.length());
+    }
+    else
+    {
+        String seconds(millis()/1000);
+        ble.writeTank(secondsTankId, seconds.c_str(), seconds.length());
+    }
 }

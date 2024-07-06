@@ -28,7 +28,8 @@ static const SimpleBLEInterface SimpleBLE::arduinoIf = {
     },
     [](void) { return (uint32_t)millis(); },
     [](uint32_t ms) { delay(ms); },
-    [](const char *dbg) { Serial.print(dbg); }
+    //[](const char *dbg) { Serial.print(dbg); }
+    NULL
 };
 #endif //ARDUINO
 
@@ -40,7 +41,12 @@ bool SimpleBLE::begin()
     pinMode(RX_ENABLE_PIN, OUTPUT);
     pinMode(MODULE_RESET_PIN, OUTPUT);
 
+    arduinoIf.rxEnabledSet(true);
+    arduinoIf.moduleResetSet(true);
+
     altSerial.begin(9600);
+
+    arduinoIf.delayMs(500);
 #endif //ARDUINO
 
     backend.begin();
@@ -48,12 +54,12 @@ bool SimpleBLE::begin()
     exitUltraLowPower();
 
 do{
-    if( softRestart() )
+    if( !softRestart() )
     {
         break;
     }
 
-    if( setTxPower(SimpleBLE::POW_0DBM) )
+    if( !setTxPower(SimpleBLE::POW_0DBM) )
     {
         break;
     }
@@ -82,7 +88,7 @@ SimpleBLE::TankId SimpleBLE::addTank(SimpleBLE::TankType type, uint32_t maxSizeB
         case SimpleBLE::WRITE :
             charFlags = SimpleBLEBackend::WRITE_WITHOUT_RESPONSE;
             break;
-        case SimpleBLE::WRITE_WITH_RESPONSE :
+        case SimpleBLE::WRITE_CONFIRMED :
             charFlags = SimpleBLEBackend::WRITE;
             break;
 
@@ -135,3 +141,58 @@ bool SimpleBLE::setDeviceName(const char* newName)
             (uint8_t*)newName,
             strlen(newName));
 }
+
+bool SimpleBLE::waitUpdates(TankId* tank, uint32_t* updateSize, uint32_t timeout)
+{
+    uint8_t serviceIndex; uint8_t charIndex; uint32_t dataSize;
+    bool retval = backend.waitCharUpdate(&serviceIndex, &charIndex, &dataSize, timeout);
+
+    if( retval && serviceIndex == tanksServiceIndex )
+    {
+        *tank = charIndex;
+
+        if( updateSize ) *updateSize = dataSize;
+    }
+
+    return retval;
+}
+
+bool SimpleBLE::readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t* readLen=NULL)
+{
+    int32_t internalReadLen = backend.readChar(tanksServiceIndex, (uint8_t)tank, buff, buffSize);
+
+    bool retval = internalReadLen > 0;
+
+    if( readLen )
+    {
+        *readLen = retval ? internalReadLen : -internalReadLen ;
+    }
+
+    return retval;
+}
+
+bool SimpleBLE::writeTank(TankId tank, uint8_t *data, uint32_t dataSize)
+{
+    return backend.writeChar(tanksServiceIndex, (uint8_t)tank, data, dataSize);
+}
+
+#ifdef ARDUINO
+SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
+{
+    SimpleBLE::TankId updatedTankId;
+    uint32_t updatedSize;
+
+    if( waitUpdates(&updatedTankId, &updatedSize, timeout) )
+    {
+        SimpleBLE::TankData updatedTank(updatedTankId, updatedSize);
+
+        uint32_t dummyReadLen; // We know how much we will read since waitUpdates() gave the size
+        if( readTank(updatedTank.getId(), updatedTank.getData(), updatedTank.getSize(), &dummyReadLen) )
+        {
+            return updatedTank;
+        }
+    }
+
+    return SimpleBLE::TankData(0);
+}
+#endif //ARDUINO
