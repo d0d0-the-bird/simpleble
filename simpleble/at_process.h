@@ -54,11 +54,11 @@ public:
      * @param delay Pointer to the delay function to use.
      * @param debug Pointer to the debug printout function to use.
      */
-    AtProcess(bool (*pSerPut)(char),
-              bool (*pSerGet)(char*),
-              void (*pDelay)(uint32_t),
-              uint32_t (*pMillis)(void),
-              void (*pOutput)(const char *) = NULL) :
+    AtProcess(bool (*const pSerPut)(char),
+              bool (*const pSerGet)(char*),
+              void (*const pDelay)(uint32_t),
+              uint32_t (*const pMillis)(void),
+              void (*const pOutput)(const char *) = NULL) :
                                                     pSerPut(pSerPut),
                                                     pSerGet(pSerGet),
                                                     pDelay(pDelay),
@@ -219,11 +219,11 @@ private:
     const char *cmdAck;
     const char *cmdError;
 
-    bool (*pSerPut)(char);
-    bool (*pSerGet)(char*);
-    void (*pDelay)(uint32_t);
-    uint32_t (*pMillis)(void);
-    void (*pOutput)(const char *);
+    bool (*const pSerPut)(char);
+    bool (*const pSerGet)(char*);
+    void (*const pDelay)(uint32_t);
+    uint32_t (*const pMillis)(void);
+    void (*const pOutput)(const char *);
 
     inline bool serPut(char c) { if( pSerPut ) return pSerPut(c); else return false; }
     inline bool serGet(char *c) { if( pSerGet ) return pSerGet(c); else return false; }

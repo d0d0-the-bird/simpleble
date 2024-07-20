@@ -1,5 +1,6 @@
 #include "simple_ble.h"
 #include "at_process.h"
+#include "timeout.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,23 +13,30 @@ static const char cmdAck[] = "\nOK\r\n";
 static const char cmdError[] = "ERROR\r\n";
 
 
-void SimpleBLE::activateModuleRx(void)
+SimpleBLEBackend::SimpleBLEBackend(const SimpleBLEInterface *ifc) :
+    ifc(ifc),
+    at(ifc->serialPut, ifc->serialGet, ifc->delayMs, ifc->millis, NULL)
 {
-    internalSetRxEnable(true);
-    internalDelay(15);
-}
-void SimpleBLE::deactivateModuleRx(void)
-{
-    internalSetRxEnable(false);
-}
-void SimpleBLE::hardResetModule(void)
-{
-    internalSetModuleReset(false);
-    internalDelay(10);
-    internalSetModuleReset(true);
+    Timeout::init(ifc->millis);
 }
 
-void SimpleBLE::begin()
+void SimpleBLEBackend::activateModuleRx(void)
+{
+    ifc->rxEnabledSet(true);
+    ifc->delayMs(15);
+}
+void SimpleBLEBackend::deactivateModuleRx(void)
+{
+    ifc->rxEnabledSet(false);
+}
+void SimpleBLEBackend::hardResetModule(void)
+{
+    ifc->moduleResetSet(false);
+    ifc->delayMs(10);
+    ifc->moduleResetSet(true);
+}
+
+void SimpleBLEBackend::begin()
 {
     AtProcessInit s = {
       cmdEnding,
@@ -37,17 +45,16 @@ void SimpleBLE::begin()
     };
     at.init(&s);
     deactivateModuleRx();
-    hardResetModule();
 }
 
-AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
+AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
                                             uint32_t timeout,
                                             char *response)
 {
     return sendReceiveCmd(cmd, NULL, 0, false, timeout, response);
 }
 
-AtProcess::Status SimpleBLE::sendReadReceiveCmd(const char *cmd,
+AtProcess::Status SimpleBLEBackend::sendReadReceiveCmd(const char *cmd,
                                                 uint8_t *buff,
                                                 uint32_t buffSize,
                                                 uint32_t timeout)
@@ -55,7 +62,7 @@ AtProcess::Status SimpleBLE::sendReadReceiveCmd(const char *cmd,
     return sendReceiveCmd(cmd, buff, buffSize, true, timeout);
 }
 
-AtProcess::Status SimpleBLE::sendWriteReceiveCmd(const char *cmd,
+AtProcess::Status SimpleBLEBackend::sendWriteReceiveCmd(const char *cmd,
                                                  uint8_t *data,
                                                  uint32_t dataSize,
                                                  uint32_t timeout)
@@ -64,7 +71,7 @@ AtProcess::Status SimpleBLE::sendWriteReceiveCmd(const char *cmd,
 }
 
 
-AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
+AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
                                             uint8_t *buff,
                                             uint32_t size,
                                             bool readNWrite,
@@ -77,8 +84,6 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
     {
         response[0] = '\0';
     }
-
-    activateModuleRx();
 
     // We will get an echo of this command uninterrupted with URCs because we
     // send it quickly.
@@ -125,13 +130,11 @@ AtProcess::Status SimpleBLE::sendReceiveCmd(const char *cmd,
         cmdStatus = at.recvResponseWaitOk(timeout, response, 100);
     }
 
-    deactivateModuleRx();
-
     return cmdStatus;
 }
 
 
-bool SimpleBLE::softRestart(void)
+bool SimpleBLEBackend::softRestart(void)
 {
     bool retval = true;
 
@@ -149,7 +152,7 @@ bool SimpleBLE::softRestart(void)
     return retval;
 }
 
-bool SimpleBLE::startAdvertisement(uint32_t advPeriod,
+bool SimpleBLEBackend::startAdvertisement(uint32_t advPeriod,
                                    int32_t advDuration,
                                    bool restartOnDisc)
 {
@@ -172,7 +175,7 @@ bool SimpleBLE::startAdvertisement(uint32_t advPeriod,
     return retval;
 }
 
-bool SimpleBLE::stopAdvertisement(void)
+bool SimpleBLEBackend::stopAdvertisement(void)
 {
     bool retval = true;
 
@@ -186,7 +189,7 @@ bool SimpleBLE::stopAdvertisement(void)
     return retval;
 }
 
-bool SimpleBLE::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
+bool SimpleBLEBackend::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
 {
     bool retval = true;
 
@@ -205,7 +208,7 @@ bool SimpleBLE::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
     return retval;
 }
 
-bool SimpleBLE::setTxPower(TxPower dbm)
+bool SimpleBLEBackend::setTxPower(TxPower dbm)
 {
     bool retval = true;
 
@@ -222,9 +225,9 @@ bool SimpleBLE::setTxPower(TxPower dbm)
     return retval;
 }
 
-int8_t SimpleBLE::addService(uint8_t servUuid)
+int8_t SimpleBLEBackend::addService(uint8_t servUuid)
 {
-    int8_t srvIndex = -1;
+    int8_t srvIndex = INVALID_SERVICE_INDEX;
 
     char cmdStr[50] = "AT+ADDSRV=";
     char helpStr[20];
@@ -246,7 +249,7 @@ int8_t SimpleBLE::addService(uint8_t servUuid)
     return srvIndex;
 }
 
-int8_t SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
+int8_t SimpleBLEBackend::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
 {
     int8_t charIndex = -1;
 
@@ -274,12 +277,12 @@ int8_t SimpleBLE::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags 
     return charIndex;
 }
 
-int32_t SimpleBLE::checkChar(uint8_t serviceIndex, uint8_t charIndex)
+int32_t SimpleBLEBackend::checkChar(uint8_t serviceIndex, uint8_t charIndex)
 {
     return readChar(serviceIndex, charIndex, NULL, 0);
 }
 
-int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
+int32_t SimpleBLEBackend::readChar(uint8_t serviceIndex, uint8_t charIndex,
                             uint8_t *buff, uint32_t buffSize)
 {
     char cmdStr[50] = "AT+READCHAR=";
@@ -329,7 +332,7 @@ int32_t SimpleBLE::readChar(uint8_t serviceIndex, uint8_t charIndex,
     return readBytes;
 }
 
-bool SimpleBLE::writeChar(uint8_t serviceIndex, uint8_t charIndex,
+bool SimpleBLEBackend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
                           uint8_t *data, uint32_t dataSize)
 {
     bool retval = false;
@@ -352,8 +355,31 @@ bool SimpleBLE::writeChar(uint8_t serviceIndex, uint8_t charIndex,
     return retval;
 }
 
+bool SimpleBLEBackend::waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
+                                  uint32_t* dataSize, uint32_t timeout)
+{
+    bool retval = false;
 
-const char *SimpleBLE::findCmdReturnStatus(const char *cmdRet, const char *statStart)
+    char urcBuff[40];
+
+    if( at.waitURC("^CHARWRITE", urcBuff, sizeof(urcBuff), timeout) > 0 )
+    {
+        char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
+        char *infoParse = &urcStart[12];
+
+        *serviceIndex = atoi(infoParse);
+        infoParse = strpbrk(infoParse, ",") + 1;
+        *charIndex = atoi(infoParse);
+        infoParse = strpbrk(infoParse, ",") + 1;
+        *dataSize = atoi(infoParse);
+
+        retval = true;
+    }
+
+    return retval;
+}
+
+const char *SimpleBLEBackend::findCmdReturnStatus(const char *cmdRet, const char *statStart)
 {
     const char *retStatus = strstr(cmdRet, statStart);
 
@@ -365,7 +391,7 @@ const char *SimpleBLE::findCmdReturnStatus(const char *cmdRet, const char *statS
     return retStatus;
 }
 
-void SimpleBLE::debugPrint(const char *str)
+void SimpleBLEBackend::debugPrint(const char *str)
 {
     internalDebug(str);
     internalDebug("\r\n");

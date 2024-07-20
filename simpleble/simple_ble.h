@@ -1,0 +1,235 @@
+#ifndef __SIMPLE_BLE_H__
+#define __SIMPLE_BLE_H__
+
+#ifdef ARDUINO
+#include "Arduino.h"
+#include "AltSoftSerial.h"
+#endif //ARDUINO
+
+#include "simple_ble_backend.h"
+
+#include <stdint.h>
+
+
+#define SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION                   (0)
+
+#define TANKS_SERVICE_UUID                                          (0xA0)
+
+
+class SimpleBLE
+{
+public:
+
+    typedef int8_t TankId;
+
+#ifdef ARDUINO
+    class TankData
+    {
+    public:
+        // Constructor
+        TankData(uint32_t size) :
+            id(SimpleBLE::INVALID_TANK_ID),
+            size(size),
+            data(size > 0 ? new uint8_t[size] : nullptr)
+        {}
+
+        TankData(SimpleBLE::TankId validId, uint32_t size) : TankData(size)
+        {
+            id = validId;
+        }
+
+        // Copy constructor
+        TankData(const TankData& other) : TankData(other.id, other.size)
+        {
+            if( data ) memcpy(data, other.data, size);
+        }
+
+        // Destructor
+        ~TankData() { delete[] data; }
+
+        SimpleBLE::TankId getId() { return id; }
+
+        // Function to get the size of the buffer
+        uint32_t getSize() const { return size; }
+
+        // Function to get a pointer to the data buffer
+        uint8_t* getData() { return data; }
+
+        // Function to get a const pointer to the data buffer
+        const uint8_t* getData() const { return data; }
+
+        // Indexing operator for non-const access
+        uint8_t& operator[](size_t index) { return data[index]; }
+
+        // Indexing operator for const access
+        const uint8_t& operator[](size_t index) const { return data[index]; }
+
+    private:
+        SimpleBLE::TankId id;
+        uint32_t size;
+        uint8_t* data;
+    };
+#endif //ARDUINO
+
+    enum TankType
+    {
+        READ,
+        WRITE,
+        WRITE_CONFIRMED
+    };
+
+    enum TxPower
+    {
+        POW_N40DBM = -40,
+        POW_N20DBM = -20,
+        POW_N16DBM = -16,
+        POW_N12DBM = -12,
+        POW_N8DBM = -8,
+        POW_N4DBM = -4,
+        POW_0DBM = 0,
+        POW_2DBM = 2,
+        POW_3DBM = 3,
+        POW_4DBM = 4
+    };
+
+    static const TankId INVALID_TANK_ID = -1;
+
+    /**
+     * @brief Construct a new Simple BLE object
+     * 
+     * @param ifc Complete SimpleBLE interface, with all external dependancies.
+     */
+#ifdef ARDUINO
+    SimpleBLE() : backend(&arduinoIf) {}
+#else //ARDUINO
+    SimpleBLE(const SimpleBLEInterface *ifc) : backend(ifc) {}
+#endif //ARDUINO
+
+    /**
+     * @brief Exit ULTRA LOW POWER mode on the module. Module UART interface
+     * becomes active again and we can communicate with it.
+     * 
+     */
+    inline void exitUltraLowPower(void) { backend.activateModuleRx(); }
+    /**
+     * @brief Enter ULTRA LOW POWER mode on the module. This will disable the UART
+     * interface and all communication to the module will be disabled. All other
+     * module functionality remains as is and module keeps advertising if
+     * advertisement was started.
+     * 
+     * @note Even in ULP mode module will still send URC messages over UART.
+     * @note ULP power consumption depends on the module configuration. If
+     *       advertisement interval is very short power consumption will be high.
+     * 
+     */
+    inline void enterUltraLowPower(void) { backend.deactivateModuleRx(); }
+    /**
+     * @brief Reset the module via reset pin. Do this only if software reset
+     *        doesn't work.
+     * 
+     */
+    inline void hardResetModule(void) { backend.hardResetModule(); }
+
+    /**
+     * @brief Initialise pins to initial values and put module to known state.
+     * 
+     */
+    bool begin();
+
+    TankId addTank(TankType type, uint32_t maxSizeBytes);
+
+    /**
+     * @brief Restart Simple BLE module via builtin command.
+     * 
+     * @return true If module successfuly restarted.
+     * @return false If and error occured during module restart.
+     */
+    bool softRestart(void) { return backend.softRestart(); }
+
+    /**
+     * @brief Start advertising with previously constructed payload with setAdvPayload
+     *        function.
+     * 
+     * @param advPeriodMs Period between advertisements in milliseconds. How often
+     *                  to advertise.
+     * @param advDurationMs Advertisement duration. How long to advertise after first
+     *                    packet. If you want infinite advertisement set this to
+     *                    SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION .
+     * @param restartOnDisc Should advertisement restart if client disconnects.
+     * @return true If advertisement started.
+     * @return false If advertisement failed to start.
+     */
+    inline bool startAdvertisement(uint32_t advPeriodMs,
+                                   int32_t advDurationMs = SIMPLEBLE_INFINITE_ADVERTISEMENT_DURATION,
+                                   bool restartOnDisc = true)
+    { return backend.startAdvertisement(advPeriodMs, advDurationMs, restartOnDisc); }
+    /**
+     * @brief Stop advertising.
+     * 
+     * @return true If advertising successfuly stoped.
+     * @return false If failed to stop advertisement.
+     */
+    inline bool stopAdvertisement(void) { return backend.stopAdvertisement(); }
+
+    /**
+     * @brief Set the BLE transmission power.
+     * 
+     * @param dbm Transmission power in dBm.
+     * @return true If transmission power was successfuly set.
+     * @return false If an error occured during transmission power adjustment.
+     */
+    bool setTxPower(TxPower dbm);
+
+    bool setDeviceName(const char* newName);
+
+    bool waitUpdates(TankId* tank, uint32_t* updateSize=NULL, uint32_t timeout=1000);
+
+    /**
+     * @brief Read data from tank.
+     * 
+     * @param tank Id of a tank we want to read.
+     * @param buff Buffer in which to save tank data.
+     * @param buffSize Buffer size.
+     * @param readLen If not NULL, length of data read from a tank
+     * @return bool false if no new data is read from a tank, true if new data is
+     *              read from a tank
+     */
+    bool readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t* readLen=NULL);
+
+    /**
+     * @brief Write data to a tank.
+     * 
+     * @param tank Id of a tank we want to write.
+     * @param data Buffer with data that should be transfered to desired tank.
+     * @param dataSize Data length in buffer.
+     * @return true If data was successfuly sent to Simple BLE module.
+     * @return false If data transmission to module was unsuccessful.
+     */
+    bool writeTank(TankId tank, uint8_t *data, uint32_t dataSize);
+
+#ifdef ARDUINO
+    TankData manageUpdates(uint32_t timeout=1000);
+#endif //ARDUINO
+
+    SimpleBLEBackend backend;
+
+    int8_t tanksServiceIndex;
+
+#ifdef ARDUINO
+private:
+// AltSoft lib uses these RX and TX pins for communication but it doesn't
+// realy nead them to be defined here. This is just for reference.
+    static const int RX_PIN = 8;
+    static const int TX_PIN = 9;
+    static const int RX_ENABLE_PIN = 10;
+    static const int MODULE_RESET_PIN = 11;
+
+    static AltSoftSerial altSerial;
+
+    static const SimpleBLEInterface arduinoIf;
+public:
+#endif //ARDUINO
+};
+
+
+#endif//__SIMPLE_BLE_H__
