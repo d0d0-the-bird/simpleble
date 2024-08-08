@@ -25,43 +25,42 @@ void setupDHT11()
 }
 void setupLCD()
 {
-  lcd.init(); 
-  lcd.backlight();
+    lcd.init(); 
+    lcd.backlight();
 }
 void setupRelay()
 {
-  pinMode(2, OUTPUT); // Connect relay to D3
-  digitalWrite(2, LOW);
+    pinMode(2, OUTPUT); // Connect relay to D3
+    digitalWrite(2, LOW);
 }
-void measureTemp()
+int measureTemp()
 {
-  //sensors_event_t event;
-  //dht.temperature().getEvent(&event);
-  //if(!isnan(event.temperature))
-  //{
-  //  measuredTemp = event.temperature;
-  //}
+    int temperature = dht11.readTemperature();
+    if (temperature != DHT11::ERROR_CHECKSUM && temperature != DHT11::ERROR_TIMEOUT)
+        return temperature;
+    else
+        return -1000; // Impossible temp
 }
 void lcdPrintTopRow(const char *text)
 {
-  lcd.setCursor(0, 0);
-  lcd.printstr(text);
+    lcd.setCursor(0, 0);
+    lcd.printstr(text);
 }
 void lcdPrintBottomRow(const char *text)
 {
-  lcd.setCursor(0, 1);
-  lcd.printstr(text);
+    lcd.setCursor(0, 1);
+    lcd.printstr(text);
 }
 void setRelay(bool newState)
 {
-  if(newState)
-  {
-    digitalWrite(2, HIGH);
-  }
-  else
-  {
-    digitalWrite(2, LOW);
-  }
+    if(newState)
+    {
+      digitalWrite(2, HIGH);
+    }
+    else
+    {
+      digitalWrite(2, LOW);
+    }
 }
 
 void setup()
@@ -72,50 +71,50 @@ void setup()
     setupLCD();
     setupRelay();
 
-    Serial.println("Example started");
+    Serial.println(F("Example started"));
 
     // Begin BLE. UART speed is at 9600 by default
     if( !ble.begin() )
     {
-        Serial.println("Failed to initialise SimpleBLE.");
+        Serial.println(F("Failed to initialise SimpleBLE."));
         delay(10); exit(1);
     }
 
     tempMeasPeriodId = ble.addTank(SimpleBLE::WRITE_CONFIRMED, 15);
     if( tempMeasPeriodId == SimpleBLE::INVALID_TANK_ID )
     {
-        Serial.println("Failed to add temperature measurement period tank.");
+        Serial.println(F("Failed to add temperature measurement period tank."));
         delay(10); exit(1);
     }
     
     tempId = ble.addTank(SimpleBLE::READ, 15);
     if( tempId == SimpleBLE::INVALID_TANK_ID )
     {
-        Serial.println("Failed to add temperature tank.");
+        Serial.println(F("Failed to add temperature tank."));
         delay(10); exit(1);
     }
 
     lcdTankId = ble.addTank(SimpleBLE::WRITE_CONFIRMED, 16);
     if( lcdTankId == SimpleBLE::INVALID_TANK_ID )
     {
-        Serial.println("Failed to add LCD display output tank.");
+        Serial.println(F("Failed to add LCD display output tank."));
         delay(10); exit(1);
     }
 
     buttonTankId = ble.addTank(SimpleBLE::WRITE_CONFIRMED, 1);
     if( buttonTankId == SimpleBLE::INVALID_TANK_ID )
     {
-        Serial.println("Failed to add button tank.");
+        Serial.println(F("Failed to add button tank."));
         delay(10); exit(1);
     }
 
-    Serial.println("Added all data tanks");
-    Serial.print("Temperature measure period Tank ID: "); Serial.println(tempMeasPeriodId);
-    Serial.print("Temperature Tank ID: "); Serial.println(tempId);
-    Serial.print("LCD display output Tank ID: "); Serial.println(lcdTankId);
-    Serial.print("Button Tank ID: "); Serial.println(buttonTankId);
+    Serial.println(F("Added all data tanks"));
+    Serial.print(F("Temperature measure period Tank ID: ")); Serial.println(tempMeasPeriodId);
+    Serial.print(F("Temperature Tank ID: ")); Serial.println(tempId);
+    Serial.print(F("LCD display output Tank ID: ")); Serial.println(lcdTankId);
+    Serial.print(F("Button Tank ID: ")); Serial.println(buttonTankId);
 
-    Serial.println("Starting advertisement.");
+    Serial.println(F("Starting advertisement."));
     ble.setDeviceName("SimpleBLE example");
     ble.startAdvertisement(300);
 }
@@ -126,8 +125,8 @@ void loop()
 {
     SimpleBLE::TankData updatedTank = ble.manageUpdates((tempMeasPeriod > 0 ? tempMeasPeriod : 2)*1000);
 
-    Serial.print("Got update from tank "); Serial.print(updatedTank.getId());
-    Serial.print(" data "); Serial.println(updatedTank[0]);
+    Serial.print(F("Got update from tank ")); Serial.print(updatedTank.getId());
+    Serial.print(F(" data ")); Serial.println(updatedTank[0]);
 
     if( updatedTank.getId() == tempMeasPeriodId )
     {
@@ -150,11 +149,6 @@ void loop()
     {
         uint8_t tmpBtnState = updatedTank[0];
 
-        // For catching fast updates, our UART speed is a bit too low
-        SimpleBLE::TankData updatedTank = ble.manageUpdates(10);
-        if( updatedTank.getId() == buttonTankId )
-            tmpBtnState = updatedTank[0];
-
         if( tmpBtnState == 0 )
         {
             setRelay(true);
@@ -166,14 +160,11 @@ void loop()
     }
     else
     {
-        int temperature = dht11.readTemperature();
-        if (temperature != DHT11::ERROR_CHECKSUM && temperature != DHT11::ERROR_TIMEOUT)
-        {
-            String temperatureStr(temperature);
-            String tempPrint = String("Temp: ") + temperatureStr + String(" C ");
-            lcdPrintTopRow(tempPrint.c_str());
-            ble.writeTank(tempId, temperatureStr.c_str(), temperatureStr.length());
-            //Serial.println(tempPrint);
-        }
+        int temperature = measureTemp();
+        String temperatureStr(temperature);
+        String tempPrint = String("Temp: ") + temperatureStr + String(" C ");
+        lcdPrintTopRow(tempPrint.c_str());
+        ble.writeTank(tempId, temperatureStr.c_str(), temperatureStr.length());
+        Serial.println(tempPrint);
     }
 }
