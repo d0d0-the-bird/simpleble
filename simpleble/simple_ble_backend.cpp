@@ -2,7 +2,6 @@
 #include "at_process.h"
 #include "timeout.h"
 
-#include <stdlib.h>
 #include <string.h>
 
 
@@ -18,6 +17,7 @@ SimpleBLEBackend::SimpleBLEBackend(const SimpleBLEInterface *ifc) :
     at(ifc->serialPut, ifc->serialGet, ifc->delayMs, ifc->millis, NULL)
 {
     Timeout::init(ifc->millis);
+    unprocessedUrc[0] = '\0';
 }
 
 void SimpleBLEBackend::activateModuleRx(void)
@@ -85,6 +85,23 @@ AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
         response[0] = '\0';
     }
 
+    // Check if there are some unprocessed URCs before we execute a new command
+    {
+        char lineBuff[80+1];
+        uint32_t lineLen = 0;
+        do
+        {
+            lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 5);
+
+            if( lineBuff[0] >= ' ' )
+            {
+                strncpy(unprocessedUrc, lineBuff, sizeof(unprocessedUrc));
+                unprocessedUrc[sizeof(unprocessedUrc)-1] = '\0';
+            }
+
+        }while(lineLen);
+    }
+
     // We will get an echo of this command uninterrupted with URCs because we
     // send it quickly.
     uint32_t sent = at.sendCommand(cmd);
@@ -99,18 +116,15 @@ AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
         // Now is the time to start checking for read data.
         if( readNWrite && buff )
         {
-            // We are reading.
-            //AtProcess::Status lineStatus;
-
             char lineBuff[80+1];
             uint32_t lineLen = 0;
 
             // Protect for later string operations.
+            lineBuff[0] = '\0';
             lineBuff[sizeof(lineBuff)-1] = '\0';
 
             do
             {
-                //lineStatus = at.recvResponse(1000, AtProcess::URC);
                 lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
                 internalDebug(lineBuff);
 
@@ -119,7 +133,6 @@ AtProcess::Status SimpleBLEBackend::sendReceiveCmd(const char *cmd,
             if( lineLen )
             {
                 // Read one line because it is still not the data.
-                //lineStatus = at.recvResponse(1000, AtProcess::URC);
                 lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
                 internalDebug(lineBuff);
 
@@ -138,7 +151,8 @@ bool SimpleBLEBackend::softRestart(void)
 {
     bool retval = true;
 
-    char cmdStr[20] = "AT+RESTART";
+    char cmdStr[20]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+RESTART");
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
@@ -158,14 +172,18 @@ bool SimpleBLEBackend::startAdvertisement(uint32_t advPeriod,
 {
     bool retval = true;
 
-    char cmdStr[40] = "AT+ADVSTART=";
+    char cmdStr[40]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+ADVSTART=");
     char helpStr[20];
 
-    strcat(cmdStr, itoa(advPeriod, helpStr, 10));
+    utilityItoa(advPeriod, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(advDuration, helpStr, 10));
+    utilityItoa(advDuration, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(restartOnDisc ? 1 : 0, helpStr, 10));
+    utilityItoa(restartOnDisc ? 1 : 0, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
@@ -193,12 +211,15 @@ bool SimpleBLEBackend::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataL
 {
     bool retval = true;
 
-    char cmdStr[40] = "AT+ADVPAYLOAD=";
+    char cmdStr[40]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+ADVPAYLOAD=");
     char helpStr[20];
 
-    strcat(cmdStr, itoa(type, helpStr, 10));
+    utilityItoa(type, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(dataLen, helpStr, 10));
+    utilityItoa(dataLen, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
     if( sendWriteReceiveCmd(cmdStr, data, dataLen) != AtProcess::SUCCESS )
     {
@@ -212,10 +233,12 @@ bool SimpleBLEBackend::setTxPower(TxPower dbm)
 {
     bool retval = true;
 
-    char cmdStr[30] = "AT+TXPOWER=";
+    char cmdStr[30]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+TXPOWER=");
     char helpStr[20];
 
-    strcat(cmdStr, itoa(dbm, helpStr, 10));
+    utilityItoa(dbm, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
     if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
     {
@@ -229,12 +252,14 @@ int8_t SimpleBLEBackend::addService(uint8_t servUuid)
 {
     int8_t srvIndex = INVALID_SERVICE_INDEX;
 
-    char cmdStr[50] = "AT+ADDSRV=";
+    char cmdStr[50]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+ADDSRV=");
     char helpStr[20];
 
     char response[100];
 
-    strcat(cmdStr, itoa(servUuid, helpStr, 10));
+    utilityItoa(servUuid, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
     if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
     {
@@ -242,7 +267,7 @@ int8_t SimpleBLEBackend::addService(uint8_t servUuid)
 
         if( retStatus )
         {
-            srvIndex = atoi(retStatus);
+            srvIndex = utilityAtoi(retStatus);
         }
     }
     
@@ -253,16 +278,20 @@ int8_t SimpleBLEBackend::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPro
 {
     int8_t charIndex = -1;
 
-    char cmdStr[50] = "AT+ADDCHAR=";
+    char cmdStr[50]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+ADDCHAR=");
     char helpStr[20];
 
-    char response[100];
+    char response[50];
 
-    strcat(cmdStr, itoa(serviceIndex, helpStr, 10));
+    utilityItoa(serviceIndex, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(maxSize, helpStr, 10));
+    utilityItoa(maxSize, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(flags, helpStr, 10));
+    utilityItoa(flags, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
     if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
     {
@@ -270,7 +299,7 @@ int8_t SimpleBLEBackend::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPro
 
         if( retStatus )
         {
-            charIndex = atoi(retStatus);
+            charIndex = utilityAtoi(retStatus);
         }
     }
 
@@ -285,20 +314,22 @@ int32_t SimpleBLEBackend::checkChar(uint8_t serviceIndex, uint8_t charIndex)
 int32_t SimpleBLEBackend::readChar(uint8_t serviceIndex, uint8_t charIndex,
                             uint8_t *buff, uint32_t buffSize)
 {
-    char cmdStr[50] = "AT+READCHAR=";
+    char cmdStr[50]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+READCHAR=");
     char helpStr[20];
-
-    char response[100];
 
     uint32_t readBytes = buffSize;
 
     bool returnData = buff ? true : false ;
 
-    strcat(cmdStr, itoa(serviceIndex, helpStr, 10));
+    utilityItoa(serviceIndex, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(charIndex, helpStr, 10));
+    utilityItoa(charIndex, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(returnData, helpStr, 10));
+    utilityItoa(returnData, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
 
     if( returnData )
@@ -309,15 +340,17 @@ int32_t SimpleBLEBackend::readChar(uint8_t serviceIndex, uint8_t charIndex,
     }
     else
     {
+        char response[100];
+
         if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
         {
             const char *retStatus = findCmdReturnStatus(response, "^READCHAR:");
 
             if( retStatus )
             {
-                readBytes = atoi(retStatus);
+                readBytes = utilityAtoi(retStatus);
 
-                bool newData = atoi(strpbrk(retStatus, ",")+1);
+                bool newData = utilityAtoi(strpbrk(retStatus, ",")+1);
 
                 // If there is no new data to be read, make bytes available to
                 // read negative.
@@ -337,14 +370,18 @@ bool SimpleBLEBackend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
 {
     bool retval = false;
 
-    char cmdStr[50] = "AT+WRITECHAR=";
+    char cmdStr[50]; cmdStr[0] = '\0';
+    strcat(cmdStr, "AT+WRITECHAR=");
     char helpStr[20];
 
-    strcat(cmdStr, itoa(serviceIndex, helpStr, 10));
+    utilityItoa(serviceIndex, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(charIndex, helpStr, 10));
+    utilityItoa(charIndex, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
     strcat(cmdStr, ",");
-    strcat(cmdStr, itoa(dataSize, helpStr, 10));
+    utilityItoa(dataSize, helpStr, sizeof(helpStr));
+    strcat(cmdStr, helpStr);
 
 
     if( sendWriteReceiveCmd(cmdStr, data, dataSize) == AtProcess::SUCCESS )
@@ -358,23 +395,35 @@ bool SimpleBLEBackend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
 bool SimpleBLEBackend::waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
                                   uint32_t* dataSize, uint32_t timeout)
 {
+    const char charwriteUrc[] = "^CHARWRITE";
+
     bool retval = false;
 
     char urcBuff[40];
 
-    if( at.waitURC("^CHARWRITE", urcBuff, sizeof(urcBuff), timeout) > 0 )
+do{
+    if( unprocessedUrc[0] && strncmp(unprocessedUrc, charwriteUrc, strlen(charwriteUrc)) == 0 )
     {
-        char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
-        char *infoParse = &urcStart[12];
-
-        *serviceIndex = atoi(infoParse);
-        infoParse = strpbrk(infoParse, ",") + 1;
-        *charIndex = atoi(infoParse);
-        infoParse = strpbrk(infoParse, ",") + 1;
-        *dataSize = atoi(infoParse);
-
-        retval = true;
+        strncpy(urcBuff, unprocessedUrc, sizeof(urcBuff));
+        unprocessedUrc[0] = '\0';
     }
+    else if( at.waitURC(charwriteUrc, urcBuff, sizeof(urcBuff), timeout) == 0 )
+    {
+        break;
+    }
+
+    char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
+    char *infoParse = &urcStart[12];
+
+    *serviceIndex = utilityAtoi(infoParse);
+    infoParse = strpbrk(infoParse, ",") + 1;
+    *charIndex = utilityAtoi(infoParse);
+    infoParse = strpbrk(infoParse, ",") + 1;
+    *dataSize = utilityAtoi(infoParse);
+
+    retval = true;
+
+}while(0);
 
     return retval;
 }
@@ -395,4 +444,115 @@ void SimpleBLEBackend::debugPrint(const char *str)
 {
     internalDebug(str);
     internalDebug("\r\n");
+}
+
+uint32_t SimpleBLEBackend::utilityItoa(int32_t value, char *strBuff, uint32_t strBuffSize)
+{
+    const uint32_t base = 10;
+    // Store information about sign.
+    bool isPositive = value >= 0 ? true : false;
+    uint32_t writtenDigits = 0;
+
+    // We want to work with positive number.
+    if( !isPositive )
+    {
+        value *= -1;
+    }
+
+    // To store all digits of a number we will use this union.
+    union
+    {
+        uint32_t raw[2];
+        struct
+        {
+            uint8_t downer : 4 ;
+            uint8_t upper : 4 ;
+        } bytePair[8];
+    } digits;
+
+    memset(digits.raw, 0x00, sizeof(digits.raw));
+
+    // Extract digits from a number.
+    uint32_t numDigits = value == 0 ? 1 : 0 ;
+    for(; value && numDigits < sizeof(digits.bytePair)*2; numDigits++)
+    {
+        uint8_t digit = value%base;
+
+        value /= base;
+
+        if( numDigits%2 == 0 )
+        {
+            digits.bytePair[numDigits/2].downer = digit;
+        }
+        else
+        {
+            digits.bytePair[numDigits/2].upper = digit;
+        }
+    }
+
+    // Add sign.
+    if( !isPositive )
+    {
+        strBuff[0] = '-';
+        // Increment pointer by one for convinience in for loop.
+        strBuff++;
+        writtenDigits++;
+    }
+
+    // Write digits to a string array.
+    for(int i = 0; i < numDigits && writtenDigits < strBuffSize; i++, writtenDigits++)
+    {
+        uint32_t digitIterator = numDigits - i - 1;
+        if( digitIterator%2 == 0 )
+        {
+            strBuff[i] = digits.bytePair[digitIterator/2].downer + '0';
+        }
+        else
+        {
+            strBuff[i] = digits.bytePair[digitIterator/2].upper + '0';
+        }
+    }
+    // Now that we are done with for loop return buffer pointer to original value.
+    isPositive ? 0 : strBuff--;
+
+    // Finish string with a null terminator.
+    if( writtenDigits < strBuffSize )
+    {
+        strBuff[writtenDigits] = '\0';
+    }
+    else
+    {
+        strBuff[0] = '\0';
+        writtenDigits = 0;
+    }
+
+    return writtenDigits;
+}
+
+int32_t SimpleBLEBackend::utilityAtoi(const char* asciiInt)
+{
+    int32_t retval = 0;
+
+    while( *asciiInt == ' ' ) asciiInt++;
+
+    int32_t sign = 1;
+
+    if( *asciiInt == '-' )
+    {
+        sign = -1;
+        asciiInt++;
+    }
+    else if( *asciiInt == '+' )
+    {
+        asciiInt++;
+    }
+
+    while( *asciiInt >= '0' && *asciiInt <= '9' )
+    {
+        retval *= 10;
+        retval += *asciiInt - '0';
+        asciiInt++;
+    }
+
+    return sign*retval;
 }
