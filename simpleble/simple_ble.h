@@ -26,11 +26,12 @@ public:
     class TankData
     {
     public:
-        // Constructor
+        // Constructor, when allocating an array always leave room for one more
+        // byte in case Tank holds text
         TankData(uint32_t size) :
             id(SimpleBLE::INVALID_TANK_ID),
             size(size),
-            data(size > 0 ? new uint8_t[size] : nullptr)
+            data(size > 0 ? new uint8_t[size+1] : nullptr)
         {}
 
         TankData(SimpleBLE::TankId validId, uint32_t size) : TankData(size)
@@ -57,6 +58,22 @@ public:
 
         // Function to get a const pointer to the data buffer
         const uint8_t* getData() const { return data; }
+
+        int getInt(int size=1)
+        {
+            uint32_t retval = 0;
+            if( size >= 1 ) retval |= (uint32_t)(data[0]) << 0;
+            if( size >= 2 ) retval |= (uint32_t)(data[1]) << 8;
+            if( size >= 3 ) retval |= (uint32_t)(data[2]) << 16;
+            if( size >= 4 ) retval |= (uint32_t)(data[3]) << 24;
+
+            return (int)retval;
+        }
+
+        // We can always add '\0' because we allocate one byte more than we need
+        // for tank data.
+        char* getCString() { data[size] = '\0'; return (char*)data; }
+        String getString() { return String(getCString()); }
 
         // Indexing operator for non-const access
         uint8_t& operator[](size_t index) { return data[index]; }
