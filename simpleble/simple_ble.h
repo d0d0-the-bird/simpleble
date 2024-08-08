@@ -59,6 +59,8 @@ public:
         // Function to get a const pointer to the data buffer
         const uint8_t* getData() const { return data; }
 
+        bool getBool() { return !!data[0]; }
+
         int getInt(int size=1)
         {
             uint32_t retval = 0;
