@@ -5,10 +5,16 @@
 
 #include "simpleble/simple_ble.h"
 
+// DHT11 library available in Arduino IDE Library Manager by the name "DHT11", or at the link:
+// https://github.com/dhrubasaha08/DHT11/tree/main
+DHT11 dht11(3); // OUT -> D3
 
-DHT11 dht11(3);
-//float measuredTemp;
+// Temperature measurement period. By default it is set to 2 seconds since this
+// is the limitation of the sensor.
+uint8_t tempMeasPeriod = 0;
 
+// LiquidCristal library available in Arduino IDE Library Manager by the name "LiquidCrystal I2C", or at the link:
+// https://github.com/johnrickman/LiquidCrystal_I2C/tree/master
 LiquidCrystal_I2C lcd(0x27, 20, 4);  // SDA -> A4, SCL -> A5
 
 static SimpleBLE ble;
@@ -39,7 +45,7 @@ int measureTemp()
     if (temperature != DHT11::ERROR_CHECKSUM && temperature != DHT11::ERROR_TIMEOUT)
         return temperature;
     else
-        return -1000; // Impossible temp
+        return -1000; // Impossible temp to signal error
 }
 void lcdPrintTopRow(const char *text)
 {
@@ -119,8 +125,6 @@ void setup()
     ble.startAdvertisement(300);
 }
 
-uint8_t tempMeasPeriod = 0;
-
 void loop()
 {
     SimpleBLE::TankData updatedTank = ble.manageUpdates((tempMeasPeriod > 0 ? tempMeasPeriod : 2)*1000);
@@ -130,24 +134,18 @@ void loop()
 
     if( updatedTank.getId() == tempMeasPeriodId )
     {
-        char tmpTempMeasStr[20];
-        memcpy(tmpTempMeasStr, updatedTank.getData(), updatedTank.getSize());
-        tmpTempMeasStr[updatedTank.getSize()] = '\0';
-        tempMeasPeriod = atoi(tmpTempMeasStr);
+        tempMeasPeriod = atoi(updatedTank.getCString());
+        Serial.print(F("New temperature update period in seconds: ")); Serial.println(tempMeasPeriod);
     }
     else if( updatedTank.getId() == lcdTankId )
     {
-        char tmpLcdStr[20];
-        memcpy(tmpLcdStr, updatedTank.getData(), updatedTank.getSize());
-        tmpLcdStr[updatedTank.getSize()] = '\0';
-
         // Clear the display and print the string from app.
         lcdPrintBottomRow("                ");
-        lcdPrintBottomRow(tmpLcdStr);
+        lcdPrintBottomRow(updatedTank.getCString());
     }
     else if( updatedTank.getId() == buttonTankId )
     {
-        uint8_t tmpBtnState = updatedTank[0];
+        int tmpBtnState = updatedTank.getInt();
 
         if( tmpBtnState == 0 )
         {
