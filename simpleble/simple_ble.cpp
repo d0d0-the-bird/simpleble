@@ -1,9 +1,7 @@
 #include "simple_ble.h"
 #include "at_process.h"
 
-#include <stdlib.h>
 #include <string.h>
-
 
 #define MODULE_RX_BLOCK_SIZE_B                                  (6)
 
@@ -186,6 +184,10 @@ SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
     {
         SimpleBLE::TankData updatedTank(updatedTankId, updatedSize);
 
+        if( updatedTank.getSize() == 0 )
+        {
+            return updatedTank;
+        }
         uint32_t dummyReadLen; // We know how much we will read since waitUpdates() gave the size
         if( readTank(updatedTank.getId(), updatedTank.getData(), updatedTank.getSize(), &dummyReadLen) )
         {

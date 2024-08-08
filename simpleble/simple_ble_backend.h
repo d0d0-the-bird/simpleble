@@ -338,6 +338,8 @@ public:
 
 private:
 
+    char unprocessedUrc[25];
+
     inline void internalDebug(const char *dbgPrint)
     {
         if( ifc->debugPrint )
@@ -345,6 +347,9 @@ private:
             ifc->debugPrint(dbgPrint);
         }
     }
+
+    uint32_t utilityItoa(int32_t value, char *strBuff, uint32_t strBuffSize);
+    int32_t utilityAtoi(const char* asciiInt);
 
     const char *findCmdReturnStatus(const char *cmdRet, const char *statStart);
     void debugPrint(const char *str);
