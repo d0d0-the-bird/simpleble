@@ -143,7 +143,7 @@ uint32_t AtProcess::getLine(
         }
         else
         {
-            delay(5);
+            delay(1);
         }
 
         timeoutExpired = respTimeout.expired();
