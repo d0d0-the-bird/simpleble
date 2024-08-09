@@ -47,6 +47,10 @@ int measureTemp()
     else
         return -1000; // Impossible temp to signal error
 }
+uint32_t getTempMeasPeriodms()
+{
+    return (tempMeasPeriod > 0 ? tempMeasPeriod : 2)*1000;
+}
 void lcdPrintTopRow(const char *text)
 {
     lcd.setCursor(0, 0);
@@ -127,7 +131,9 @@ void setup()
 
 void loop()
 {
-    SimpleBLE::TankData updatedTank = ble.manageUpdates((tempMeasPeriod > 0 ? tempMeasPeriod : 2)*1000);
+    static uint32_t startMeas = 0;
+
+    SimpleBLE::TankData updatedTank = ble.manageUpdates();
 
     Serial.print(F("Got update from tank ")); Serial.print(updatedTank.getId());
     Serial.print(F(" data ")); Serial.println(updatedTank[0]);
@@ -156,8 +162,10 @@ void loop()
             setRelay(false);
         }
     }
-    else
+
+    if( millis()-startMeas >= getTempMeasPeriodms() )
     {
+        startMeas = millis();
         int temperature = measureTemp();
         String temperatureStr(temperature);
         String tempPrint = String("Temp: ") + temperatureStr + String(" C ");
