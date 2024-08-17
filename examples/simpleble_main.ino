@@ -61,7 +61,8 @@ void loop()
     SimpleBLE::TankData updatedTank = ble.manageUpdates();
 
     Serial.print(F("Got update from tank ")); Serial.print(updatedTank.getId());
-    Serial.print(F(" data ")); Serial.println(updatedTank[0]);
+    Serial.print(F(" data "));
+    Serial.println(updatedTank.getId() != SimpleBLE::INVALID_TANK_ID ? String(updatedTank[0]) : String("NONE"));
 
     if( updatedTank.getId() == buttonTankId )
     {
