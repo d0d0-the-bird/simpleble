@@ -1,22 +1,26 @@
 #ifndef __ESP32_BACKEND_H__
 #define __ESP32_BACKEND_H__
 
-#include "at_process.h"
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 #include <stdint.h>
+
+
+#define CONST_CEIL(div1, div2)      (((div1) +                                  \
+                                      !!((div1)%(div2))*(div2) -                \
+                                      (div1)%(div2)                             \
+                                     )                                          \
+                                     /                                          \
+                                     (div2)                                     \
+                                    )
 
 
 /**
  * @brief Simple BLE interface structure
  * 
- * @param rxEnabledSet Function pointer to a function that sets and clears
- *                     RX enabled pin.
- * @param moduleResetSet Function pointer to a function that sets and clears
- *                       module reset pin.
- * @param serialPut Function pointer to a function that puts one char to
- *                  serial interface.
- * @param serialGet Function pointer to a function that receives one character
- *                  from serial interface.
  * @param millis Function pointer to a function that gets total
  *               elapsed milliseconds from start of the program.
  * @param delayMs Function pointer to a function that delays further execution
@@ -24,12 +28,8 @@
  * @param debugPrint Optional Function pointer to a function that prints
  *                   various debug information to desired output.
  */
-struct SimpleBLEInterface
+struct Esp32BackendInterface
 {
-    void (*const rxEnabledSet)(bool);
-    void (*const moduleResetSet)(bool);
-    bool (*const serialPut)(char);
-    bool (*const serialGet)(char*);
     uint32_t (*const millis)(void);
     void (*const delayMs)(uint32_t);
     void (*const debugPrint)(const char*);
@@ -41,6 +41,9 @@ class Esp32Backend
 {
 public:
     static const int8_t INVALID_SERVICE_INDEX = -1;
+
+    static const uint8_t MAX_NUM_SERVICES = 15;
+    static const uint8_t MAX_NUM_CHARS = 10;
 
     enum AdvType
     {
@@ -101,12 +104,17 @@ public:
         POW_N20DBM = -20,
         POW_N16DBM = -16,
         POW_N12DBM = -12,
+        POW_N9DBM = -9,
         POW_N8DBM = -8,
+        POW_N6DBM = -6,
         POW_N4DBM = -4,
+        POW_N3DBM = -3,
         POW_0DBM = 0,
         POW_2DBM = 2,
         POW_3DBM = 3,
-        POW_4DBM = 4
+        POW_4DBM = 4,
+        POW_6DBM = 6,
+        POW_9DBM = 9,
     };
 
     /**
@@ -114,7 +122,7 @@ public:
      * 
      * @param ifc Complete SimpleBLE interface, with all external dependancies.
      */
-    Esp32Backend(const SimpleBLEInterface *ifc);
+    Esp32Backend(const Esp32BackendInterface *ifc);
 
     /**
      * @brief Activate module serial reception of data.
@@ -138,78 +146,6 @@ public:
      * 
      */
     void begin();
-
-    /**
-     * @brief Send a command that doesn't need to receive any data.
-     * 
-     * @param cmd Command string that you want to send.
-     * @param timeout How long to wait for module response in milliseconds.
-     * @param response Optional buffer to store module response, make sure it is
-     *                 of sufficient size!
-     * @return AtProcess::Status Returns SUCCESS if response was received and no
-     *                           error was reported by module.
-     *                           Returns TIMEOUT if no command was received in
-     *                           specified time.
-     *                           Returns GEN_ERROR if module reported and error.
-     */
-    AtProcess::Status sendReceiveCmd(const char *cmd, uint32_t timeout = 3000, char *response = NULL);
-    /**
-     * @brief Send a command that has to read data from serial.
-     * 
-     * @param cmd Command string that you want to send.
-     * @param buff Data buffer in which to store received data.
-     * @param buffSize Data buffer size.
-     * @param timeout How long to wait for module response in milliseconds.
-     * @return AtProcess::Status Returns SUCCESS if response was received and no
-     *                           error was reported by module.
-     *                           Returns TIMEOUT if no command was received in
-     *                           specified time.
-     *                           Returns GEN_ERROR if module reported and error.
-     */
-    AtProcess::Status sendReadReceiveCmd(const char *cmd,
-                                         uint8_t *buff,
-                                         uint32_t buffSize,
-                                         uint32_t timeout = 3000);
-    /**
-     * @brief Send a command that also has to write data to serial.
-     * 
-     * @param cmd Command string that you want to send.
-     * @param data Data buffer which contains data for Simple BLE module.
-     * @param dataSize Length of data in data buffer.
-     * @param timeout How long to wait for module response in milliseconds.
-     * @return AtProcess::Status Returns SUCCESS if response was received and no
-     *                           error was reported by module.
-     *                           Returns TIMEOUT if no command was received in
-     *                           specified time.
-     *                           Returns GEN_ERROR if module reported and error.
-     */
-    AtProcess::Status sendWriteReceiveCmd(const char *cmd,
-                                          uint8_t *data,
-                                          uint32_t dataSize,
-                                          uint32_t timeout = 3000);
-    /**
-     * @brief Command that joins all of the above sendReceiveCmd into one function.
-     * 
-     * @param cmd Command string that you want to send.
-     * @param buff Read buffer or write data depending on readNWrite parameter. Set
-     *             to NULL if neither is needed.
-     * @param size Size of the buffer or data length, depending on readNWrite parameter.
-     * @param readNWrite Boolean which tells if data should be read or written.
-     * @param timeout How long to wait for module response in milliseconds.
-     * @param response Optional buffer to store module response, make sure it is
-     *                 of sufficient size!
-     * @return AtProcess::Status Returns SUCCESS if response was received and no
-     *                           error was reported by module.
-     *                           Returns TIMEOUT if no command was received in
-     *                           specified time.
-     *                           Returns GEN_ERROR if module reported and error.
-     */
-    AtProcess::Status sendReceiveCmd(const char *cmd,
-                                    uint8_t *buff,
-                                    uint32_t size,
-                                    bool readNWrite,
-                                    uint32_t timeout = 3000,
-                                    char *response = NULL);
 
     /**
      * @brief Restart Simple BLE module via builtin command.
@@ -327,18 +263,71 @@ public:
      * @return false If data transmission to module was unsuccessful.
      */
     bool writeChar(uint8_t serviceIndex, uint8_t charIndex,
-                   uint8_t *data, uint32_t dataSize);
+                   const uint8_t *data, uint32_t dataSize);
 
     bool waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
                         uint32_t* dataSize, uint32_t timeout=1000);
 
-    const SimpleBLEInterface *ifc;
+    const Esp32BackendInterface *ifc;
 
-    AtProcess at;
+    bool restartAdvOnDisc;
+
+    struct
+    {
+        BLEService* serv;
+        uint8_t charNum;
+    } services[MAX_NUM_SERVICES];
+    uint8_t servNum;
+
+    struct UpdatedDataFlags
+    {
+        UpdatedDataFlags() { memset(charFlags, 0x00, sizeof(charFlags)); }
+
+        inline bool isValidIndex(uint32_t charIndex)
+        {
+            return charIndex < MAX_NUM_CHARS;
+        }
+        inline bool setFlag(uint32_t charIndex)
+        {
+            if( isValidIndex(charIndex) )
+            {
+                charFlags[charIndex/bitsPerByte] |= 1 << (charIndex%bitsPerByte);
+            }
+
+            return isValidIndex(charIndex);
+        }
+        inline bool rstFlag(uint32_t charIndex)
+        {
+            if( isValidIndex(charIndex) )
+            {
+                charFlags[charIndex/bitsPerByte] &= ~(1 << (charIndex%bitsPerByte));
+            }
+
+            return isValidIndex(charIndex);
+        }
+        inline bool getFlag(uint32_t charIndex)
+        {
+            if( isValidIndex(charIndex) )
+            {
+                return charFlags[charIndex/bitsPerByte] & 1 << (charIndex%bitsPerByte);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        static const int bitsPerByte = 8;
+
+        uint8_t charFlags[CONST_CEIL(MAX_NUM_CHARS, bitsPerByte)];
+    };
+
+    UpdatedDataFlags receivedData[sizeof(services)/sizeof(services[0])];
+    UpdatedDataFlags readData[sizeof(services)/sizeof(services[0])];
 
 private:
 
-    char unprocessedUrc[25];
+    BLEServer* pServer;
 
     inline void internalDebug(const char *dbgPrint)
     {
@@ -348,10 +337,13 @@ private:
         }
     }
 
-    uint32_t utilityItoa(int32_t value, char *strBuff, uint32_t strBuffSize);
+    BLEUUID charUuidFromIndex(uint8_t servIndex, uint8_t charIndex);
+    BLEUUID charUuidFromIndex(BLEUUID servUuid, uint8_t charIndex);
+
+    BLECharacteristic* getCharacteristic(uint8_t servIndex, uint8_t charIndex);
+
     int32_t utilityAtoi(const char* asciiInt);
 
-    const char *findCmdReturnStatus(const char *cmdRet, const char *statStart);
     void debugPrint(const char *str);
 
 };

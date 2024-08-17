@@ -1,150 +1,133 @@
-#include "simple_ble.h"
-#include "at_process.h"
+#include "esp32_backend.h"
 #include "timeout.h"
+
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
 
 #include <string.h>
 
+#define BASE_SERVER_UUID "91ba0000-b950-4226-aa2b-4ede9fa42f59"
+
+BLEUUID baseUuid(BASE_SERVER_UUID);
+BLEUUID notifyDescUuid((uint16_t)0x2902);
 
 
-Esp32Backend::Esp32Backend(const SimpleBLEInterface *ifc) :
+class SimpleBLEServerCallbacks: public BLEServerCallbacks
+{
+public:
+    SimpleBLEServerCallbacks(Esp32Backend* owner) : owner(owner) {}
+
+    Esp32Backend* owner;
+
+    void onConnect(BLEServer* pServer)
+    {
+        //deviceConnected = true;
+    }
+    void onDisconnect(BLEServer* pServer)
+    {
+        //deviceConnected = false;
+        if( owner->restartAdvOnDisc )
+            pServer->getAdvertising()->start();
+    }
+};
+
+class SimpleBLECharCallbacks: public BLECharacteristicCallbacks
+{
+public:
+    SimpleBLECharCallbacks(Esp32Backend* owner) : owner(owner) {}
+
+    Esp32Backend* owner;
+
+    void onWrite(BLECharacteristic *pCharacteristic, esp_ble_gatts_cb_param_t *param)
+    {
+        (void)param;
+
+        BLEUUID charUuid = pCharacteristic->getUUID();
+
+        int8_t servIndex;
+        int8_t charIndex = getServCharIdx(charUuid, servIndex);
+
+        if( charIndex >= 0)
+        {
+            owner->receivedData[servIndex].setFlag(charIndex);
+        }
+    }
+    void onRead(BLECharacteristic *pCharacteristic, esp_ble_gatts_cb_param_t *param)
+    {
+        (void)param;
+
+        BLEUUID charUuid = pCharacteristic->getUUID();
+
+        int8_t servIndex;
+        int8_t charIndex = getServCharIdx(charUuid, servIndex);
+
+        if( charIndex >= 0)
+        {
+            owner->readData[servIndex].setFlag(charIndex);
+        }
+    }
+
+    int8_t getServCharIdx(BLEUUID& charUuid, int8_t& servIndex)
+    {
+        uint8_t charIndex = -1;
+        for(servIndex = 0; servIndex < owner->servNum; servIndex++)
+        {
+            if( owner->services[servIndex].serv->getCharacteristic(charUuid) != nullptr )
+            {
+                BLEUUID servUuid = owner->services[servIndex].serv->getUUID();
+                charIndex = charUuid.getNative()->uuid.uuid128[3] - servUuid.getNative()->uuid.uuid128[3] - 1;
+                break;
+            }
+        }
+
+        return charIndex;
+    }
+};
+
+Esp32Backend::Esp32Backend(const Esp32BackendInterface *ifc) :
     ifc(ifc),
-    at(ifc->serialPut, ifc->serialGet, ifc->delayMs, ifc->millis, NULL)
+    servNum(0),
+    restartAdvOnDisc(false)
 {
     Timeout::init(ifc->millis);
-    unprocessedUrc[0] = '\0';
+
+    pServer = NULL;
 }
 
 void Esp32Backend::activateModuleRx(void)
 {
-    ifc->rxEnabledSet(true);
-    ifc->delayMs(15);
+    //TODO: implement going out of sleep
 }
 void Esp32Backend::deactivateModuleRx(void)
 {
-    ifc->rxEnabledSet(false);
+    //TODO: implement going to sleep
 }
 void Esp32Backend::hardResetModule(void)
 {
-    ifc->moduleResetSet(false);
-    ifc->delayMs(10);
-    ifc->moduleResetSet(true);
+    // Leave empty for compatibility
 }
 
 void Esp32Backend::begin()
 {
-    AtProcessInit s = {
-      cmdEnding,
-      cmdAck,
-      cmdError,
-    };
-    at.init(&s);
-    deactivateModuleRx();
+    BLEDevice::init("");
+
+    pServer = BLEDevice::createServer();
+    pServer->setCallbacks(new SimpleBLEServerCallbacks(this));
+
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
+
+    // Set custom advertising data
+    pAdvertising->setScanResponse(false);
+    pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+    pAdvertising->setMaxPreferred(0x12);
 }
-
-AtProcess::Status Esp32Backend::sendReceiveCmd(const char *cmd,
-                                            uint32_t timeout,
-                                            char *response)
-{
-    return sendReceiveCmd(cmd, NULL, 0, false, timeout, response);
-}
-
-AtProcess::Status Esp32Backend::sendReadReceiveCmd(const char *cmd,
-                                                uint8_t *buff,
-                                                uint32_t buffSize,
-                                                uint32_t timeout)
-{
-    return sendReceiveCmd(cmd, buff, buffSize, true, timeout);
-}
-
-AtProcess::Status Esp32Backend::sendWriteReceiveCmd(const char *cmd,
-                                                 uint8_t *data,
-                                                 uint32_t dataSize,
-                                                 uint32_t timeout)
-{
-    return sendReceiveCmd(cmd, data, dataSize, false, timeout);
-}
-
-
-AtProcess::Status Esp32Backend::sendReceiveCmd(const char *cmd,
-                                            uint8_t *buff,
-                                            uint32_t size,
-                                            bool readNWrite,
-                                            uint32_t timeout,
-                                            char *response)
-{
-    AtProcess::Status cmdStatus = AtProcess::GEN_ERROR;
-
-    if( response )
-    {
-        response[0] = '\0';
-    }
-
-    // Check if there are some unprocessed URCs before we execute a new command
-    {
-        char lineBuff[80+1];
-        uint32_t lineLen = 0;
-        do
-        {
-            lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 5);
-
-            if( lineBuff[0] >= ' ' )
-            {
-                strncpy(unprocessedUrc, lineBuff, sizeof(unprocessedUrc));
-                unprocessedUrc[sizeof(unprocessedUrc)-1] = '\0';
-            }
-
-        }while(lineLen);
-    }
-
-    // We will get an echo of this command uninterrupted with URCs because we
-    // send it quickly.
-    uint32_t sent = at.sendCommand(cmd);
-
-    if( !readNWrite && buff )
-    {
-        // We are writing.
-        sent += at.write(buff, size);
-    }
-    if( sent > 0 )
-    {
-        // Now is the time to start checking for read data.
-        if( readNWrite && buff )
-        {
-            char lineBuff[80+1];
-            uint32_t lineLen = 0;
-
-            // Protect for later string operations.
-            lineBuff[0] = '\0';
-            lineBuff[sizeof(lineBuff)-1] = '\0';
-
-            do
-            {
-                lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
-                internalDebug(lineBuff);
-
-            }while(lineLen && strncmp(cmd, lineBuff, strlen(cmd)) != 0);
-
-            if( lineLen )
-            {
-                // Read one line because it is still not the data.
-                lineLen = at.getLine(lineBuff, sizeof(lineBuff)-1, 1000);
-                internalDebug(lineBuff);
-
-                at.readBytesBlocking(buff, size);
-            }
-        }
-
-        cmdStatus = at.recvResponseWaitOk(timeout, response, 100);
-    }
-
-    return cmdStatus;
-}
-
 
 bool Esp32Backend::softRestart(void)
 {
     bool retval = true;
-
+/*
     char cmdStr[20]; cmdStr[0] = '\0';
     strcat(cmdStr, "AT+RESTART");
 
@@ -156,33 +139,40 @@ bool Esp32Backend::softRestart(void)
     {
         at.waitURC("^START", NULL, 0, 5000);
     }
-
+*/
     return retval;
 }
 
-bool Esp32Backend::startAdvertisement(uint32_t advPeriod,
-                                   int32_t advDuration,
+bool Esp32Backend::startAdvertisement(uint32_t advPeriodMs,
+                                   int32_t advDurationMs,
                                    bool restartOnDisc)
 {
+    static bool servicesStarted = false;
+
+    const uint32_t minAdvIntIncrementsUs = 625; // microseconds [us]
+
     bool retval = true;
 
-    char cmdStr[40]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+ADVSTART=");
-    char helpStr[20];
+    (void)advDurationMs; // For now we don't implement advertising duration on ESP
 
-    utilityItoa(advPeriod, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(advDuration, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(restartOnDisc ? 1 : 0, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
+    // Get advertising object
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 
-    if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
+    // Set advertising interval (in milliseconds)
+    pAdvertising->setMinInterval(advPeriodMs*1000/minAdvIntIncrementsUs);
+    pAdvertising->setMaxInterval(advPeriodMs*1000/minAdvIntIncrementsUs);
+
+    if( !servicesStarted )
     {
-        retval = false;
+        for(uint8_t i = 0; i < servNum; i++)
+        {
+            services[i].serv->start();
+        }
+        servicesStarted = true;
     }
+
+    // Start advertising with the configured interval
+    pAdvertising->start();
 
     return retval;
 }
@@ -191,12 +181,11 @@ bool Esp32Backend::stopAdvertisement(void)
 {
     bool retval = true;
 
-    const char* cmdStr = "AT+ADVSTOP";
+    // Get advertising object
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 
-    if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
-    {
-        retval = false;
-    }
+    // Stop advertising after the specified duration
+    pAdvertising->stop();
 
     return retval;
 }
@@ -205,20 +194,24 @@ bool Esp32Backend::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
 {
     bool retval = true;
 
-    char cmdStr[40]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+ADVPAYLOAD=");
-    char helpStr[20];
+    // Get advertising object
+    BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
 
-    utilityItoa(type, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(dataLen, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
+    // Custom advertising data
+    BLEAdvertisementData oAdvertisementData = BLEAdvertisementData();
 
-    if( sendWriteReceiveCmd(cmdStr, data, dataLen) != AtProcess::SUCCESS )
-    {
-        retval = false;
-    }
+    char cdata[2];
+    cdata[0] = dataLen + 1;
+    cdata[1] = (esp_ble_adv_data_type)type;
+    oAdvertisementData.addData(String(cdata, 2) + String((char*)data, dataLen));
+    //oAdvertisementData.setFlags(0x06); // General discoverable mode, BR/EDR not supported
+
+    // Manufacturer specific data
+    //std::string manufacturerData = "Hello";
+    //oAdvertisementData.addManufacturerData(manufacturerData);
+
+    // Setting the custom data as the advertisement payload
+    pAdvertising->setAdvertisementData(oAdvertisementData);
 
     return retval;
 }
@@ -227,73 +220,77 @@ bool Esp32Backend::setTxPower(TxPower dbm)
 {
     bool retval = true;
 
-    char cmdStr[30]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+TXPOWER=");
-    char helpStr[20];
-
-    utilityItoa(dbm, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-
-    if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
+    esp_power_level_t espDbm;
+    switch(dbm)
     {
-        retval = false;
+        case POW_N40DBM:
+        case POW_N20DBM:
+        case POW_N16DBM:
+        case POW_N12DBM: espDbm = ESP_PWR_LVL_N12; break;
+        case POW_N9DBM:
+        case POW_N8DBM:  espDbm = ESP_PWR_LVL_N9; break;
+        case POW_N6DBM:  espDbm = ESP_PWR_LVL_N6; break;
+        case POW_N4DBM:
+        case POW_N3DBM:  espDbm = ESP_PWR_LVL_N3; break;
+        case POW_0DBM:   espDbm = ESP_PWR_LVL_N0; break;
+        case POW_2DBM:
+        case POW_3DBM:
+        case POW_4DBM:   espDbm = ESP_PWR_LVL_P3; break;
+        case POW_6DBM:   espDbm = ESP_PWR_LVL_P6; break;
+        case POW_9DBM:   espDbm = ESP_PWR_LVL_P9; break;
+        default:         espDbm = ESP_PWR_LVL_N0; break;
     }
+
+    BLEDevice::setPower(espDbm);
 
     return retval;
 }
 
 int8_t Esp32Backend::addService(uint8_t servUuid)
 {
-    int8_t srvIndex = INVALID_SERVICE_INDEX;
+    int8_t servIndex = INVALID_SERVICE_INDEX;
 
-    char cmdStr[50]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+ADDSRV=");
-    char helpStr[20];
-
-    char response[100];
-
-    utilityItoa(servUuid, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-
-    if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
+    if( servNum < MAX_NUM_SERVICES )
     {
-        const char *retStatus = findCmdReturnStatus(response, "^ADDSRV:");
-
-        if( retStatus )
-        {
-            srvIndex = utilityAtoi(retStatus);
-        }
+        servIndex = servNum;
+        servNum++;
+        BLEUUID servUuidFull = baseUuid;
+        servUuidFull.getNative()->uuid.uuid128[2] = servUuid;
+        services[servIndex].serv = pServer->createService(servUuidFull);
+        services[servIndex].charNum = 0;
     }
-    
-    return srvIndex;
+
+    return servIndex;
 }
 
 int8_t Esp32Backend::addChar(uint8_t serviceIndex, uint32_t maxSize, CharPropFlags flags)
 {
     int8_t charIndex = -1;
 
-    char cmdStr[50]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+ADDCHAR=");
-    char helpStr[20];
+    // We don't use max size in ESP because it dinamicaly allocates required size.
+    (void)maxSize;
 
-    char response[50];
+    uint32_t espProps = 0;
 
-    utilityItoa(serviceIndex, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(maxSize, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(flags, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
+    espProps |= (flags & CharPropFlags::BROADCAST) ? BLECharacteristic::PROPERTY_BROADCAST : 0 ;
+    espProps |= (flags & CharPropFlags::READ) ? BLECharacteristic::PROPERTY_READ : 0 ;
+    espProps |= (flags & CharPropFlags::WRITE_WITHOUT_RESPONSE) ? BLECharacteristic::PROPERTY_WRITE_NR : 0 ;
+    espProps |= (flags & CharPropFlags::WRITE) ? BLECharacteristic::PROPERTY_WRITE : 0 ;
+    espProps |= (flags & CharPropFlags::NOTIFY) ? BLECharacteristic::PROPERTY_NOTIFY : 0 ;
+    espProps |= (flags & CharPropFlags::INDICATE) ? BLECharacteristic::PROPERTY_INDICATE : 0 ;
 
-    if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
+    bool notifies = (flags & CharPropFlags::NOTIFY) ? true : false ;
+
+    if( serviceIndex < servNum )
     {
-        const char *retStatus = findCmdReturnStatus(response, "^ADDCHAR:");
-
-        if( retStatus )
+        charIndex = services[serviceIndex].charNum;
+        services[serviceIndex].charNum++;
+        BLEUUID charUuid = charUuidFromIndex(serviceIndex, charIndex);
+        BLECharacteristic* newChar = services[serviceIndex].serv->createCharacteristic(charUuid, espProps);
+        newChar->setCallbacks(new SimpleBLECharCallbacks(this));
+        if( notifies )
         {
-            charIndex = utilityAtoi(retStatus);
+            newChar->addDescriptor(new BLEDescriptor(notifyDescUuid));
         }
     }
 
@@ -308,50 +305,40 @@ int32_t Esp32Backend::checkChar(uint8_t serviceIndex, uint8_t charIndex)
 int32_t Esp32Backend::readChar(uint8_t serviceIndex, uint8_t charIndex,
                             uint8_t *buff, uint32_t buffSize)
 {
-    char cmdStr[50]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+READCHAR=");
-    char helpStr[20];
-
-    uint32_t readBytes = buffSize;
+    int32_t readBytes = 0;
 
     bool returnData = buff ? true : false ;
 
-    utilityItoa(serviceIndex, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(charIndex, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(returnData, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
+    BLECharacteristic* characteristic = getCharacteristic(serviceIndex, charIndex);
 
-
-    if( returnData )
+    if( characteristic )
     {
-        if( sendReadReceiveCmd(cmdStr, buff, buffSize) == AtProcess::SUCCESS )
+        if( returnData )
         {
-        }
-    }
-    else
-    {
-        char response[100];
+            uint8_t* charData = characteristic->getData();
 
-        if( sendReceiveCmd(cmdStr, 3000, response) == AtProcess::SUCCESS )
-        {
-            const char *retStatus = findCmdReturnStatus(response, "^READCHAR:");
-
-            if( retStatus )
+            // Read all characteristic bytes if buffer is large enough, otherwise
+            // just fill the buffer.
+            uint32_t toRead = 
+                buffSize > characteristic->getLength() ?
+                characteristic->getLength() :
+                buffSize ;
+            for(; readBytes < toRead; readBytes++)
             {
-                readBytes = utilityAtoi(retStatus);
+                buff[readBytes] = charData[readBytes];
+            }
 
-                bool newData = utilityAtoi(strpbrk(retStatus, ",")+1);
+            receivedData[serviceIndex].rstFlag(charIndex);
+        }
+        else
+        {
+            readBytes = characteristic->getLength();
 
-                // If there is no new data to be read, make bytes available to
-                // read negative.
-                if( !newData )
-                {
-                    readBytes *= -1;
-                }
+            // If there is no new data to be read, make bytes available to
+            // read negative.
+            if( !receivedData[serviceIndex].getFlag(charIndex) )
+            {
+                readBytes *= -1;
             }
         }
     }
@@ -360,27 +347,21 @@ int32_t Esp32Backend::readChar(uint8_t serviceIndex, uint8_t charIndex,
 }
 
 bool Esp32Backend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
-                          uint8_t *data, uint32_t dataSize)
+                             const uint8_t *data, uint32_t dataSize)
 {
     bool retval = false;
 
-    char cmdStr[50]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+WRITECHAR=");
-    char helpStr[20];
+    BLECharacteristic* characteristic = getCharacteristic(serviceIndex, charIndex);
 
-    utilityItoa(serviceIndex, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(charIndex, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
-    strcat(cmdStr, ",");
-    utilityItoa(dataSize, helpStr, sizeof(helpStr));
-    strcat(cmdStr, helpStr);
+    // Data just gets coppied so it is safe to cast it from const here.
+    characteristic->setValue((uint8_t*)data, dataSize);
 
+    readData[serviceIndex].rstFlag(charIndex);
 
-    if( sendWriteReceiveCmd(cmdStr, data, dataSize) == AtProcess::SUCCESS )
+    // Check if notify descriptor present and if it is send a notification.
+    if( characteristic->getDescriptorByUUID(notifyDescUuid) )
     {
-        retval = true;
+        characteristic->notify();
     }
 
     return retval;
@@ -389,50 +370,42 @@ bool Esp32Backend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
 bool Esp32Backend::waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
                                   uint32_t* dataSize, uint32_t timeout)
 {
-    const char charwriteUrc[] = "^CHARWRITE";
-
     bool retval = false;
 
-    char urcBuff[40];
+    *dataSize = 0;
 
-do{
-    if( unprocessedUrc[0] && strncmp(unprocessedUrc, charwriteUrc, strlen(charwriteUrc)) == 0 )
+    Timeout waitCharUpdate(timeout);
+
+    while( waitCharUpdate.notExpired() )
     {
-        strncpy(urcBuff, unprocessedUrc, sizeof(urcBuff));
-        unprocessedUrc[0] = '\0';
+        for( *serviceIndex = 0; *serviceIndex < servNum; (*serviceIndex)++ )
+        {
+            const uint8_t serviceNumberOfChars = services[*serviceIndex].charNum;
+            for( *charIndex = 0; *charIndex < serviceNumberOfChars; (*charIndex)++ )
+            {
+                if( receivedData[*serviceIndex].getFlag(*charIndex) )
+                {
+                    BLECharacteristic* characteristic = getCharacteristic(*serviceIndex, *charIndex);
+                    *dataSize = characteristic->getLength();
+                    retval = true;
+                    break;
+                }
+            }
+            if( retval )
+            {
+                break;
+            }
+        }
+        if( retval )
+        {
+            break;
+        }
+        ifc->delayMs(2);
     }
-    else if( at.waitURC(charwriteUrc, urcBuff, sizeof(urcBuff), timeout) == 0 )
-    {
-        break;
-    }
-
-    char *urcStart = urcBuff; while(*urcStart != '^') urcStart++;
-    char *infoParse = &urcStart[12];
-
-    *serviceIndex = utilityAtoi(infoParse);
-    infoParse = strpbrk(infoParse, ",") + 1;
-    *charIndex = utilityAtoi(infoParse);
-    infoParse = strpbrk(infoParse, ",") + 1;
-    *dataSize = utilityAtoi(infoParse);
-
-    retval = true;
-
-}while(0);
 
     return retval;
 }
 
-const char *Esp32Backend::findCmdReturnStatus(const char *cmdRet, const char *statStart)
-{
-    const char *retStatus = strstr(cmdRet, statStart);
-
-    if( retStatus )
-    {
-        retStatus += strlen(statStart);
-    }
-
-    return retStatus;
-}
 
 void Esp32Backend::debugPrint(const char *str)
 {
@@ -440,113 +413,19 @@ void Esp32Backend::debugPrint(const char *str)
     internalDebug("\r\n");
 }
 
-uint32_t Esp32Backend::utilityItoa(int32_t value, char *strBuff, uint32_t strBuffSize)
+BLEUUID Esp32Backend::charUuidFromIndex(uint8_t servIndex, uint8_t charIndex)
 {
-    const uint32_t base = 10;
-    // Store information about sign.
-    bool isPositive = value >= 0 ? true : false;
-    uint32_t writtenDigits = 0;
-
-    // We want to work with positive number.
-    if( !isPositive )
-    {
-        value *= -1;
-    }
-
-    // To store all digits of a number we will use this union.
-    union
-    {
-        uint32_t raw[2];
-        struct
-        {
-            uint8_t downer : 4 ;
-            uint8_t upper : 4 ;
-        } bytePair[8];
-    } digits;
-
-    memset(digits.raw, 0x00, sizeof(digits.raw));
-
-    // Extract digits from a number.
-    uint32_t numDigits = value == 0 ? 1 : 0 ;
-    for(; value && numDigits < sizeof(digits.bytePair)*2; numDigits++)
-    {
-        uint8_t digit = value%base;
-
-        value /= base;
-
-        if( numDigits%2 == 0 )
-        {
-            digits.bytePair[numDigits/2].downer = digit;
-        }
-        else
-        {
-            digits.bytePair[numDigits/2].upper = digit;
-        }
-    }
-
-    // Add sign.
-    if( !isPositive )
-    {
-        strBuff[0] = '-';
-        // Increment pointer by one for convinience in for loop.
-        strBuff++;
-        writtenDigits++;
-    }
-
-    // Write digits to a string array.
-    for(int i = 0; i < numDigits && writtenDigits < strBuffSize; i++, writtenDigits++)
-    {
-        uint32_t digitIterator = numDigits - i - 1;
-        if( digitIterator%2 == 0 )
-        {
-            strBuff[i] = digits.bytePair[digitIterator/2].downer + '0';
-        }
-        else
-        {
-            strBuff[i] = digits.bytePair[digitIterator/2].upper + '0';
-        }
-    }
-    // Now that we are done with for loop return buffer pointer to original value.
-    isPositive ? 0 : strBuff--;
-
-    // Finish string with a null terminator.
-    if( writtenDigits < strBuffSize )
-    {
-        strBuff[writtenDigits] = '\0';
-    }
-    else
-    {
-        strBuff[0] = '\0';
-        writtenDigits = 0;
-    }
-
-    return writtenDigits;
+    charUuidFromIndex(services[servIndex].serv->getUUID(), charIndex);
+}
+BLEUUID Esp32Backend::charUuidFromIndex(BLEUUID servUuid, uint8_t charIndex)
+{
+    servUuid.getNative()->uuid.uuid128[3] = charIndex + 1;
+    return servUuid;
 }
 
-int32_t Esp32Backend::utilityAtoi(const char* asciiInt)
+BLECharacteristic* Esp32Backend::getCharacteristic(uint8_t servIndex, uint8_t charIndex)
 {
-    int32_t retval = 0;
-
-    while( *asciiInt == ' ' ) asciiInt++;
-
-    int32_t sign = 1;
-
-    if( *asciiInt == '-' )
-    {
-        sign = -1;
-        asciiInt++;
-    }
-    else if( *asciiInt == '+' )
-    {
-        asciiInt++;
-    }
-
-    while( *asciiInt >= '0' && *asciiInt <= '9' )
-    {
-        retval *= 10;
-        retval += *asciiInt - '0';
-        asciiInt++;
-    }
-
-    return sign*retval;
+    BLEService* service = services[servIndex].serv;
+    return service->getCharacteristic(charUuidFromIndex(servIndex, charIndex));
 }
+
