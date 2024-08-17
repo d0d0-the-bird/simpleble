@@ -1,4 +1,4 @@
-#include "simple_ble.h"
+#include "simple_ble_backend.h"
 #include "at_process.h"
 #include "timeout.h"
 
@@ -12,7 +12,7 @@ static const char cmdAck[] = "\nOK\r\n";
 static const char cmdError[] = "ERROR\r\n";
 
 
-SimpleBLEBackend::SimpleBLEBackend(const SimpleBLEInterface *ifc) :
+SimpleBLEBackend::SimpleBLEBackend(const SimpleBLEBackendInterface *ifc) :
     ifc(ifc),
     at(ifc->serialPut, ifc->serialGet, ifc->delayMs, ifc->millis, NULL)
 {
@@ -318,7 +318,7 @@ int32_t SimpleBLEBackend::readChar(uint8_t serviceIndex, uint8_t charIndex,
     strcat(cmdStr, "AT+READCHAR=");
     char helpStr[20];
 
-    uint32_t readBytes = buffSize;
+    int32_t readBytes = buffSize;
 
     bool returnData = buff ? true : false ;
 
@@ -366,7 +366,7 @@ int32_t SimpleBLEBackend::readChar(uint8_t serviceIndex, uint8_t charIndex,
 }
 
 bool SimpleBLEBackend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
-                          uint8_t *data, uint32_t dataSize)
+                                 const uint8_t *data, uint32_t dataSize)
 {
     bool retval = false;
 
@@ -384,7 +384,7 @@ bool SimpleBLEBackend::writeChar(uint8_t serviceIndex, uint8_t charIndex,
     strcat(cmdStr, helpStr);
 
 
-    if( sendWriteReceiveCmd(cmdStr, data, dataSize) == AtProcess::SUCCESS )
+    if( sendWriteReceiveCmd(cmdStr, (uint8_t*)data, dataSize) == AtProcess::SUCCESS )
     {
         retval = true;
     }

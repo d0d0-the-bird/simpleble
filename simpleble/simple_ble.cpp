@@ -3,16 +3,22 @@
 
 #include <string.h>
 
-#define MODULE_RX_BLOCK_SIZE_B                                  (6)
 
 static const char cmdEnding[] = "\r";
 static const char cmdAck[] = "\nOK\r\n";
 static const char cmdError[] = "ERROR\r\n";
 
 
-
-#ifdef ARDUINO
-static const SimpleBLEInterface SimpleBLE::arduinoIf = {
+#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ESP32_BACKEND
+const Esp32BackendInterface SimpleBLE::arduinoIf = {
+    [](void) { return (uint32_t)millis(); },
+    [](uint32_t ms) { delay(ms); },
+    //[](const char *dbg) { Serial.print(dbg); }
+    NULL
+};
+#else
+static const SimpleBLEBackendInterface SimpleBLE::arduinoIf = {
     [](bool state) { digitalWrite(RX_ENABLE_PIN, state ? HIGH : LOW); },
     [](bool state) { digitalWrite(MODULE_RESET_PIN, state ? HIGH : LOW); },
     [](char c) { return altSerial.write(c) > 0; },
@@ -29,23 +35,25 @@ static const SimpleBLEInterface SimpleBLE::arduinoIf = {
     //[](const char *dbg) { Serial.print(dbg); }
     NULL
 };
-#endif //ARDUINO
+#endif //USING_ESP32_BACKEND
+#endif //USING_ARDUINO_INTRFACE
 
 bool SimpleBLE::begin()
 {
     bool retval = false;
 
-#ifdef ARDUINO
+#ifdef USING_ARDUINO_INTRFACE
+#ifndef USING_ESP32_BACKEND
     pinMode(RX_ENABLE_PIN, OUTPUT);
     pinMode(MODULE_RESET_PIN, OUTPUT);
 
     arduinoIf.rxEnabledSet(true);
     arduinoIf.moduleResetSet(true);
-
     altSerial.begin(9600);
+#endif //USING_ESP32_BACKEND
 
     arduinoIf.delayMs(500);
-#endif //ARDUINO
+#endif //USING_ARDUINO_INTRFACE
 
     backend.begin();
 
@@ -63,7 +71,7 @@ do{
     }
 
     tanksServiceIndex = backend.addService(TANKS_SERVICE_UUID);
-    if( tanksServiceIndex == SimpleBLEBackend::INVALID_SERVICE_INDEX )
+    if( tanksServiceIndex == BackendNs::INVALID_SERVICE_INDEX )
     {
         break;
     }
@@ -76,18 +84,18 @@ do{
 
 SimpleBLE::TankId SimpleBLE::addTank(SimpleBLE::TankType type, uint32_t maxSizeBytes)
 {
-    SimpleBLEBackend::CharPropFlags charFlags = SimpleBLEBackend::NONE;
+    BackendNs::CharPropFlags charFlags = BackendNs::NONE;
 
     switch (type)
     {
         case SimpleBLE::READ :
-            charFlags = SimpleBLEBackend::READ | SimpleBLEBackend::NOTIFY;
+            charFlags = BackendNs::READ_AND_NOTIFY;
             break;
         case SimpleBLE::WRITE :
-            charFlags = SimpleBLEBackend::WRITE_WITHOUT_RESPONSE;
+            charFlags = BackendNs::WRITE_WITHOUT_RESPONSE;
             break;
         case SimpleBLE::WRITE_CONFIRMED :
-            charFlags = SimpleBLEBackend::WRITE;
+            charFlags = BackendNs::WRITE;
             break;
 
         default:
@@ -96,7 +104,7 @@ SimpleBLE::TankId SimpleBLE::addTank(SimpleBLE::TankType type, uint32_t maxSizeB
 
     SimpleBLE::TankId newTankId = INVALID_TANK_ID;
 
-    if( charFlags != SimpleBLEBackend::NONE )
+    if( charFlags != BackendNs::NONE )
     {
         newTankId = backend.addChar(
             tanksServiceIndex,
@@ -109,23 +117,23 @@ SimpleBLE::TankId SimpleBLE::addTank(SimpleBLE::TankType type, uint32_t maxSizeB
 
 bool SimpleBLE::setTxPower(SimpleBLE::TxPower dbm)
 {
-    SimpleBLEBackend::TxPower bkdDbm = SimpleBLEBackend::POW_0DBM;
+    BackendNs::TxPower bkdDbm = BackendNs::POW_0DBM;
 
     switch (dbm)
     {
-        case SimpleBLE::POW_N40DBM : bkdDbm = SimpleBLEBackend::POW_N40DBM; break;
-        case SimpleBLE::POW_N20DBM : bkdDbm = SimpleBLEBackend::POW_N20DBM; break;
-        case SimpleBLE::POW_N16DBM : bkdDbm = SimpleBLEBackend::POW_N16DBM; break;
-        case SimpleBLE::POW_N12DBM : bkdDbm = SimpleBLEBackend::POW_N12DBM; break;
-        case SimpleBLE::POW_N8DBM : bkdDbm = SimpleBLEBackend::POW_N8DBM; break;
-        case SimpleBLE::POW_N4DBM : bkdDbm = SimpleBLEBackend::POW_N4DBM; break;
-        case SimpleBLE::POW_0DBM : bkdDbm = SimpleBLEBackend::POW_0DBM; break;
-        case SimpleBLE::POW_2DBM : bkdDbm = SimpleBLEBackend::POW_2DBM; break;
-        case SimpleBLE::POW_3DBM : bkdDbm = SimpleBLEBackend::POW_3DBM; break;
-        case SimpleBLE::POW_4DBM : bkdDbm = SimpleBLEBackend::POW_4DBM; break;
+        case SimpleBLE::POW_N40DBM : bkdDbm = BackendNs::POW_N40DBM; break;
+        case SimpleBLE::POW_N20DBM : bkdDbm = BackendNs::POW_N20DBM; break;
+        case SimpleBLE::POW_N16DBM : bkdDbm = BackendNs::POW_N16DBM; break;
+        case SimpleBLE::POW_N12DBM : bkdDbm = BackendNs::POW_N12DBM; break;
+        case SimpleBLE::POW_N8DBM : bkdDbm = BackendNs::POW_N8DBM; break;
+        case SimpleBLE::POW_N4DBM : bkdDbm = BackendNs::POW_N4DBM; break;
+        case SimpleBLE::POW_0DBM : bkdDbm = BackendNs::POW_0DBM; break;
+        case SimpleBLE::POW_2DBM : bkdDbm = BackendNs::POW_2DBM; break;
+        case SimpleBLE::POW_3DBM : bkdDbm = BackendNs::POW_3DBM; break;
+        case SimpleBLE::POW_4DBM : bkdDbm = BackendNs::POW_4DBM; break;
 
         default :
-            bkdDbm = SimpleBLEBackend::POW_0DBM;
+            bkdDbm = BackendNs::POW_0DBM;
             break;
     }
 
@@ -135,7 +143,7 @@ bool SimpleBLE::setTxPower(SimpleBLE::TxPower dbm)
 bool SimpleBLE::setDeviceName(const char* newName)
 {
     return backend.setAdvPayload(
-            SimpleBLEBackend::COMPLETE_LOCAL_NAME,
+            BackendNs::COMPLETE_LOCAL_NAME,
             (uint8_t*)newName,
             strlen(newName));
 }
@@ -155,7 +163,7 @@ bool SimpleBLE::waitUpdates(TankId* tank, uint32_t* updateSize, uint32_t timeout
     return retval;
 }
 
-bool SimpleBLE::readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t* readLen=NULL)
+bool SimpleBLE::readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t* readLen)
 {
     int32_t internalReadLen = backend.readChar(tanksServiceIndex, (uint8_t)tank, buff, buffSize);
 
@@ -169,12 +177,17 @@ bool SimpleBLE::readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t
     return retval;
 }
 
-bool SimpleBLE::writeTank(TankId tank, uint8_t *data, uint32_t dataSize)
+bool SimpleBLE::writeTank(TankId tank, const uint8_t *data, uint32_t dataSize)
 {
     return backend.writeChar(tanksServiceIndex, (uint8_t)tank, data, dataSize);
 }
 
-#ifdef ARDUINO
+bool SimpleBLE::writeTank(TankId tank, const char *str)
+{
+    return writeTank(tank, (const uint8_t*)str, strlen(str));
+}
+
+#ifdef USING_ARDUINO_INTRFACE
 SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
 {
     SimpleBLE::TankId updatedTankId;
@@ -197,4 +210,4 @@ SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
 
     return SimpleBLE::TankData(0);
 }
-#endif //ARDUINO
+#endif //USING_ARDUINO_INTRFACE

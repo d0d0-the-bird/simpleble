@@ -24,7 +24,7 @@
  * @param debugPrint Optional Function pointer to a function that prints
  *                   various debug information to desired output.
  */
-struct SimpleBLEInterface
+struct SimpleBLEBackendInterface
 {
     void (*const rxEnabledSet)(bool);
     void (*const moduleResetSet)(bool);
@@ -114,7 +114,7 @@ public:
      * 
      * @param ifc Complete SimpleBLE interface, with all external dependancies.
      */
-    SimpleBLEBackend(const SimpleBLEInterface *ifc);
+    SimpleBLEBackend(const SimpleBLEBackendInterface *ifc);
 
     /**
      * @brief Activate module serial reception of data.
@@ -327,12 +327,12 @@ public:
      * @return false If data transmission to module was unsuccessful.
      */
     bool writeChar(uint8_t serviceIndex, uint8_t charIndex,
-                   uint8_t *data, uint32_t dataSize);
+                   const uint8_t *data, uint32_t dataSize);
 
     bool waitCharUpdate(uint8_t* serviceIndex, uint8_t* charIndex,
                         uint32_t* dataSize, uint32_t timeout=1000);
 
-    const SimpleBLEInterface *ifc;
+    const SimpleBLEBackendInterface *ifc;
 
     AtProcess at;
 

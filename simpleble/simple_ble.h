@@ -2,11 +2,25 @@
 #define __SIMPLE_BLE_H__
 
 #ifdef ARDUINO
-#include "Arduino.h"
-#include "AltSoftSerial.h"
+#define USING_ARDUINO_INTRFACE
 #endif //ARDUINO
 
+#ifdef ESP32
+#define USING_ESP32_BACKEND
+#endif //ESP32
+
+#ifdef USING_ARDUINO_INTRFACE
+#include "Arduino.h"
+#ifndef USING_ESP32_BACKEND
+#include "AltSoftSerial.h"
+#endif //USING_ESP32_BACKEND
+#endif //USING_ARDUINO_INTRFACE
+
+#ifdef USING_ESP32_BACKEND
+#include "esp32_backend.h"
+#else
 #include "simple_ble_backend.h"
+#endif //USING_ESP32_BACKEND
 
 #include <stdint.h>
 
@@ -16,13 +30,17 @@
 #define TANKS_SERVICE_UUID                                          (0xA0)
 
 
+#ifndef USING_ESP32_BACKEND
+typedef SimpleBLEBackendInterface SimpleBLEInterface;
+#endif //USING_ESP32_BACKEND
+
 class SimpleBLE
 {
 public:
 
     typedef int8_t TankId;
 
-#ifdef ARDUINO
+#ifdef USING_ARDUINO_INTRFACE
     class TankData
     {
     public:
@@ -88,7 +106,7 @@ public:
         uint32_t size;
         uint8_t* data;
     };
-#endif //ARDUINO
+#endif //USING_ARDUINO_INTRFACE
 
     enum TankType
     {
@@ -118,11 +136,11 @@ public:
      * 
      * @param ifc Complete SimpleBLE interface, with all external dependancies.
      */
-#ifdef ARDUINO
+#ifdef USING_ARDUINO_INTRFACE
     SimpleBLE() : backend(&arduinoIf) {}
-#else //ARDUINO
+#else //USING_ARDUINO_INTRFACE
     SimpleBLE(const SimpleBLEInterface *ifc) : backend(ifc) {}
-#endif //ARDUINO
+#endif //USING_ARDUINO_INTRFACE
 
     /**
      * @brief Exit ULTRA LOW POWER mode on the module. Module UART interface
@@ -224,17 +242,32 @@ public:
      * @return true If data was successfuly sent to Simple BLE module.
      * @return false If data transmission to module was unsuccessful.
      */
-    bool writeTank(TankId tank, uint8_t *data, uint32_t dataSize);
+    bool writeTank(TankId tank, const uint8_t *data, uint32_t dataSize);
+    /**
+     * @brief Write C string to a tank.
+     * 
+     * @param tank Id of a tank we want to write.
+     * @param str Buffer with C string that should be transfered to desired tank.
+     * @return true If data was successfuly sent to Simple BLE module.
+     * @return false If data transmission to module was unsuccessful.
+     */
+    bool writeTank(TankId tank, const char *str);
 
-#ifdef ARDUINO
+#ifdef USING_ARDUINO_INTRFACE
     TankData manageUpdates(uint32_t timeout=1000);
-#endif //ARDUINO
+#endif //USING_ARDUINO_INTRFACE
 
+#ifdef USING_ESP32_BACKEND
+    typedef Esp32Backend BackendNs;
+    Esp32Backend backend;
+#else
+    typedef SimpleBLEBackend BackendNs;
     SimpleBLEBackend backend;
+#endif //USING_ESP32_BACKEND
 
     int8_t tanksServiceIndex;
 
-#ifdef ARDUINO
+#ifdef USING_ARDUINO_INTRFACE
 private:
 // AltSoft lib uses these RX and TX pins for communication but it doesn't
 // realy nead them to be defined here. This is just for reference.
@@ -243,11 +276,15 @@ private:
     static const int RX_ENABLE_PIN = 10;
     static const int MODULE_RESET_PIN = 11;
 
+#ifdef USING_ESP32_BACKEND
+    static const Esp32BackendInterface arduinoIf;
+#else
     static AltSoftSerial altSerial;
 
-    static const SimpleBLEInterface arduinoIf;
+    static const SimpleBLEBackendInterface arduinoIf;
+#endif //USING_ESP32_BACKEND
 public:
-#endif //ARDUINO
+#endif //USING_ARDUINO_INTRFACE
 };
 
 
