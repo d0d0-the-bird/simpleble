@@ -77,7 +77,10 @@ public:
             if( owner->services[servIndex].serv->getCharacteristic(charUuid) != nullptr )
             {
                 BLEUUID servUuid = owner->services[servIndex].serv->getUUID();
-                charIndex = charUuid.getNative()->uuid.uuid128[3] - servUuid.getNative()->uuid.uuid128[3] - 1;
+                const uint8_t uuidLen = servUuid.getNative()->len;
+                charIndex = charUuid.getNative()->uuid.uuid128[uuidLen - 4] -
+                            servUuid.getNative()->uuid.uuid128[uuidLen - 4] -
+                            1;
                 break;
             }
         }
@@ -171,6 +174,8 @@ bool Esp32Backend::startAdvertisement(uint32_t advPeriodMs,
         servicesStarted = true;
     }
 
+    restartAdvOnDisc = restartOnDisc;
+
     // Start advertising with the configured interval
     pAdvertising->start();
 
@@ -255,7 +260,7 @@ int8_t Esp32Backend::addService(uint8_t servUuid)
         servIndex = servNum;
         servNum++;
         BLEUUID servUuidFull = baseUuid;
-        servUuidFull.getNative()->uuid.uuid128[2] = servUuid;
+        servUuidFull.getNative()->uuid.uuid128[servUuidFull.getNative()->len - 3] = servUuid;
         services[servIndex].serv = pServer->createService(servUuidFull);
         services[servIndex].charNum = 0;
     }
@@ -415,11 +420,11 @@ void Esp32Backend::debugPrint(const char *str)
 
 BLEUUID Esp32Backend::charUuidFromIndex(uint8_t servIndex, uint8_t charIndex)
 {
-    charUuidFromIndex(services[servIndex].serv->getUUID(), charIndex);
+    return charUuidFromIndex(services[servIndex].serv->getUUID(), charIndex);
 }
 BLEUUID Esp32Backend::charUuidFromIndex(BLEUUID servUuid, uint8_t charIndex)
 {
-    servUuid.getNative()->uuid.uuid128[3] = charIndex + 1;
+    servUuid.getNative()->uuid.uuid128[servUuid.getNative()->len - 4] = charIndex + 1;
     return servUuid;
 }
 
