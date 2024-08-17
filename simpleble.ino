@@ -68,7 +68,7 @@ void loop()
         bool buttonState = updatedTank.getBool();
 
         String btnStateStr(buttonState ? "down" : "up");
-        ble.writeTank(btnStateTankId, btnStateStr.c_str(), btnStateStr.length());
+        ble.writeTank(btnStateTankId, btnStateStr.c_str());
     }
 
     if( millis()-startSecond >= 1000 )
@@ -76,6 +76,6 @@ void loop()
         startSecond = millis();
 
         String seconds(millis()/1000);
-        ble.writeTank(secondsTankId, seconds.c_str(), seconds.length());
+        ble.writeTank(secondsTankId, seconds.c_str());
     }
 }
