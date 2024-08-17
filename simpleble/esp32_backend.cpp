@@ -130,19 +130,7 @@ void Esp32Backend::begin()
 bool Esp32Backend::softRestart(void)
 {
     bool retval = true;
-/*
-    char cmdStr[20]; cmdStr[0] = '\0';
-    strcat(cmdStr, "AT+RESTART");
 
-    if( sendReceiveCmd(cmdStr) != AtProcess::SUCCESS )
-    {
-        retval = false;
-    }
-    else
-    {
-        at.waitURC("^START", NULL, 0, 5000);
-    }
-*/
     return retval;
 }
 
@@ -209,11 +197,6 @@ bool Esp32Backend::setAdvPayload(AdvType type, uint8_t *data, uint32_t dataLen)
     cdata[0] = dataLen + 1;
     cdata[1] = (esp_ble_adv_data_type)type;
     oAdvertisementData.addData(String(cdata, 2) + String((char*)data, dataLen));
-    //oAdvertisementData.setFlags(0x06); // General discoverable mode, BR/EDR not supported
-
-    // Manufacturer specific data
-    //std::string manufacturerData = "Hello";
-    //oAdvertisementData.addManufacturerData(manufacturerData);
 
     // Setting the custom data as the advertisement payload
     pAdvertising->setAdvertisementData(oAdvertisementData);
