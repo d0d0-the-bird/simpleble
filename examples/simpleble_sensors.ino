@@ -5,9 +5,17 @@
 
 #include "simpleble/simple_ble.h"
 
+#ifdef ESP32
+// Relay pin number
+#define RELAY_PIN 18 // D18
+#else
+// Relay pin number
+#define RELAY_PIN 2 // D2
+#endif // ESP32
+
 // DHT11 library available in Arduino IDE Library Manager by the name "DHT11", or at the link:
 // https://github.com/dhrubasaha08/DHT11/tree/main
-DHT11 dht11(3); // OUT -> D3
+DHT11 dht11(4); // OUT -> D4
 
 // Temperature measurement period. By default it is set to 2 seconds since this
 // is the limitation of the sensor.
@@ -15,7 +23,9 @@ uint8_t tempMeasPeriod = 0;
 
 // LiquidCristal library available in Arduino IDE Library Manager by the name "LiquidCrystal I2C", or at the link:
 // https://github.com/johnrickman/LiquidCrystal_I2C/tree/master
-LiquidCrystal_I2C lcd(0x27, 20, 4);  // SDA -> A4, SCL -> A5
+// Arduino Uno: SDA -> A4,  SCL -> A5
+// ESP32:       SDA -> D21, SCL -> D22
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 static SimpleBLE ble;
 
@@ -31,13 +41,13 @@ void setupDHT11()
 }
 void setupLCD()
 {
-    lcd.init(); 
+    lcd.init();
     lcd.backlight();
 }
 void setupRelay()
 {
-    pinMode(2, OUTPUT); // Connect relay to D3
-    digitalWrite(2, LOW);
+    pinMode(RELAY_PIN, OUTPUT); // Connect relay to D3
+    digitalWrite(RELAY_PIN, LOW);
 }
 int measureTemp()
 {
@@ -65,11 +75,11 @@ void setRelay(bool newState)
 {
     if(newState)
     {
-      digitalWrite(2, HIGH);
+      digitalWrite(RELAY_PIN, HIGH);
     }
     else
     {
-      digitalWrite(2, LOW);
+      digitalWrite(RELAY_PIN, LOW);
     }
 }
 
