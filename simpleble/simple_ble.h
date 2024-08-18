@@ -49,7 +49,7 @@ public:
         TankData(uint32_t size) :
             id(SimpleBLE::INVALID_TANK_ID),
             size(size),
-            data(size > 0 ? new uint8_t[size+1] : nullptr)
+            data(new uint8_t[size+1])
         {}
 
         TankData(SimpleBLE::TankId validId, uint32_t size) : TankData(size)
