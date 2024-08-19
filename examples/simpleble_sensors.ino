@@ -145,10 +145,7 @@ void loop()
 
     SimpleBLE::TankData updatedTank = ble.manageUpdates();
 
-    Serial.print(F("Got update from tank ")); Serial.print(updatedTank.getId());
-    Serial.print(F(" data "));
-    Serial.println(updatedTank.getId() != SimpleBLE::INVALID_TANK_ID ? String(updatedTank[0]) : String("NONE"));
-
+    Serial.print(F("Got update from tank ")); Serial.println(updatedTank.getId());
 
     if( updatedTank.getId() == tempMeasPeriodId )
     {
@@ -157,21 +154,27 @@ void loop()
     }
     else if( updatedTank.getId() == lcdTankId )
     {
+        Serial.print(F("New LCD text: ")); Serial.println(updatedTank.getCString());
+
         // Clear the display and print the string from app.
         lcdPrintBottomRow("                ");
         lcdPrintBottomRow(updatedTank.getCString());
     }
     else if( updatedTank.getId() == buttonTankId )
     {
-        int tmpBtnState = updatedTank.getInt();
+        int btnState = updatedTank.getInt();
 
-        if( tmpBtnState == 0 )
+        if( btnState == 0 )
         {
             setRelay(true);
+
+            Serial.println(F("New relay state: ON"));
         }
-        else if( tmpBtnState == 2 )
+        else if( btnState == 2 )
         {
             setRelay(false);
+
+            Serial.println(F("New relay state: OFF"));
         }
     }
 
@@ -182,7 +185,7 @@ void loop()
         String temperatureStr(temperature);
         String tempPrint = String("Temp: ") + temperatureStr + String(" C ");
         lcdPrintTopRow(tempPrint.c_str());
-        ble.writeTank(tempId, temperatureStr.c_str(), temperatureStr.length());
+        ble.writeTank(tempId, temperatureStr.c_str());
         Serial.println(tempPrint);
     }
 }
