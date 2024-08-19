@@ -167,11 +167,11 @@ bool SimpleBLE::readTank(TankId tank, uint8_t *buff, uint32_t buffSize, uint32_t
 {
     int32_t internalReadLen = backend.readChar(tanksServiceIndex, (uint8_t)tank, buff, buffSize);
 
-    bool retval = internalReadLen > 0;
+    bool retval = internalReadLen <= buffSize;
 
     if( readLen )
     {
-        *readLen = retval ? internalReadLen : -internalReadLen ;
+        *readLen = internalReadLen;
     }
 
     return retval;
@@ -197,10 +197,6 @@ SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
     {
         SimpleBLE::TankData updatedTank(updatedTankId, updatedSize);
 
-        if( updatedTank.getSize() == 0 )
-        {
-            return updatedTank;
-        }
         uint32_t dummyReadLen; // We know how much we will read since waitUpdates() gave the size
         if( readTank(updatedTank.getId(), updatedTank.getData(), updatedTank.getSize(), &dummyReadLen) )
         {
