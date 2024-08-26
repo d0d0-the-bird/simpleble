@@ -2,19 +2,19 @@
 #define __SIMPLE_BLE_H__
 
 #ifdef ARDUINO
-#define USING_ARDUINO_INTRFACE
+#define USING_ARDUINO_INTERFACE
 #endif //ARDUINO
 
 #ifdef ESP32
 #define USING_ESP32_BACKEND
 #endif //ESP32
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
 #include "Arduino.h"
 #ifndef USING_ESP32_BACKEND
 #include "AltSoftSerial.h"
 #endif //USING_ESP32_BACKEND
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 
 #ifdef USING_ESP32_BACKEND
 #include "esp32_backend.h"
@@ -40,7 +40,7 @@ public:
 
     typedef int8_t TankId;
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
     class TankData
     {
     public:
@@ -106,7 +106,7 @@ public:
         uint32_t size;
         uint8_t* data;
     };
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 
     enum TankType
     {
@@ -136,11 +136,11 @@ public:
      * 
      * @param ifc Complete SimpleBLE interface, with all external dependancies.
      */
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
     SimpleBLE() : backend(&arduinoIf) {}
-#else //USING_ARDUINO_INTRFACE
+#else //USING_ARDUINO_INTERFACE
     SimpleBLE(const SimpleBLEInterface *ifc) : backend(ifc) {}
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 
     /**
      * @brief Exit ULTRA LOW POWER mode on the module. Module UART interface
@@ -253,9 +253,9 @@ public:
      */
     bool writeTank(TankId tank, const char *str);
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
     TankData manageUpdates(uint32_t timeout=1000);
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 
 #ifdef USING_ESP32_BACKEND
     typedef Esp32Backend BackendNs;
@@ -267,7 +267,7 @@ public:
 
     int8_t tanksServiceIndex;
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
 private:
 // AltSoft lib uses these RX and TX pins for communication but it doesn't
 // realy nead them to be defined here. This is just for reference.
@@ -284,7 +284,7 @@ private:
     static const SimpleBLEBackendInterface arduinoIf;
 #endif //USING_ESP32_BACKEND
 public:
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 };
 
 

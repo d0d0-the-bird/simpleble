@@ -9,7 +9,7 @@ static const char cmdAck[] = "\nOK\r\n";
 static const char cmdError[] = "ERROR\r\n";
 
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
 #ifdef USING_ESP32_BACKEND
 const Esp32BackendInterface SimpleBLE::arduinoIf = {
     [](void) { return (uint32_t)millis(); },
@@ -36,13 +36,13 @@ static const SimpleBLEBackendInterface SimpleBLE::arduinoIf = {
     NULL
 };
 #endif //USING_ESP32_BACKEND
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 
 bool SimpleBLE::begin()
 {
     bool retval = false;
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
 #ifndef USING_ESP32_BACKEND
     pinMode(RX_ENABLE_PIN, OUTPUT);
     pinMode(MODULE_RESET_PIN, OUTPUT);
@@ -53,7 +53,7 @@ bool SimpleBLE::begin()
 #endif //USING_ESP32_BACKEND
 
     arduinoIf.delayMs(500);
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
 
     backend.begin();
 
@@ -187,7 +187,7 @@ bool SimpleBLE::writeTank(TankId tank, const char *str)
     return writeTank(tank, (const uint8_t*)str, strlen(str));
 }
 
-#ifdef USING_ARDUINO_INTRFACE
+#ifdef USING_ARDUINO_INTERFACE
 SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
 {
     SimpleBLE::TankId updatedTankId;
@@ -206,4 +206,4 @@ SimpleBLE::TankData SimpleBLE::manageUpdates(uint32_t timeout)
 
     return SimpleBLE::TankData(0);
 }
-#endif //USING_ARDUINO_INTRFACE
+#endif //USING_ARDUINO_INTERFACE
