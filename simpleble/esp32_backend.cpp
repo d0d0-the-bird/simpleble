@@ -1,3 +1,5 @@
+#ifdef ESP32
+
 #include "esp32_backend.h"
 #include "timeout.h"
 
@@ -417,3 +419,4 @@ BLECharacteristic* Esp32Backend::getCharacteristic(uint8_t servIndex, uint8_t ch
     return service->getCharacteristic(charUuidFromIndex(servIndex, charIndex));
 }
 
+#endif //ESP32
